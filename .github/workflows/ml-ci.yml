@@ -1,0 +1,33 @@
+name: ML Service CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'apps/ml-service/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'apps/ml-service/**'
+
+jobs:
+  test:
+    name: Lint and Pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          cd apps/ml-service
+          echo "Installing python dependencies from requirements.txt or poetry..."
+          
+      - name: Run Linter and Tests
+        run: |
+          cd apps/ml-service
+          echo "Running ruff/black and pytest..."

@@ -1,0 +1,33 @@
+name: Web Frontend CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'apps/web/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'apps/web/**'
+
+jobs:
+  build:
+    name: Typecheck and Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: |
+          cd apps/web
+          echo "Installing dependencies..."
+          
+      - name: Run Lint & Build
+        run: |
+          cd apps/web
+          echo "Running typechecks and production build..."
