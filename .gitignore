@@ -1,5 +1,8 @@
 __pycache__/
 *.py[cod]
+.vercel
+.env*
+
 
 # Node / Next.js
 node_modules/
