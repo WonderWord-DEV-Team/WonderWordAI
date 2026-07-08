@@ -3,9 +3,9 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
 
-GRANT USAGE ON SCHEMA extensions TO authenticated, anon;
+GRANT USAGE ON SCHEMA extensions TO authenticated, anon, supabase_auth_admin;
 
-SELECT plan(16);
+SELECT plan(18);
 
 TRUNCATE TABLE
     public.story_interactions,
@@ -335,6 +335,35 @@ SELECT is(
 SELECT is(
     public.custom_access_token_hook(
         jsonb_build_object(
+            'user_id', '00000000-0000-0000-0000-000000000201',
+            'claims', jsonb_build_object(
+                'role', 'authenticated',
+                'sub', '00000000-0000-0000-0000-000000000201'
+            )
+        )
+    ) #>> '{claims,user_role}',
+    'PARENT',
+    'custom_access_token_hook returns the parent application user_role claim'
+);
+
+SELECT is(
+    public.custom_access_token_hook(
+        jsonb_build_object(
+            'user_id', '00000000-0000-0000-0000-000000000999',
+            'claims', jsonb_build_object(
+                'role', 'authenticated',
+                'sub', '00000000-0000-0000-0000-000000000999',
+                'user_role', 'PARENT'
+            )
+        )
+    ) #> '{claims,user_role}',
+    NULL::jsonb,
+    'custom_access_token_hook removes user_role when there is no application profile'
+);
+
+SELECT is(
+    public.custom_access_token_hook(
+        jsonb_build_object(
             'user_id', '00000000-0000-0000-0000-000000000101',
             'claims', jsonb_build_object(
                 'role', 'authenticated',
@@ -345,6 +374,8 @@ SELECT is(
     'authenticated',
     'custom_access_token_hook preserves the standard JWT role claim'
 );
+
+RESET ROLE;
 
 SELECT *
 FROM finish();
