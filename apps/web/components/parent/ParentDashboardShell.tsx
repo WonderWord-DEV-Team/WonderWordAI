@@ -133,7 +133,7 @@ function SkillColumn({
   );
 }
 
-function GoalCard({ title, items }: { title: string; items: string[] }) {
+function GoalCard({ title, items }: { title: string[] }) {
   return (
     <div className="rounded-2xl bg-[#F5A65B] p-5 text-white">
       <h3 className="mb-3 text-sm font-bold">{title}</h3>
@@ -255,7 +255,7 @@ export function ParentDashboardShell() {
                       contentStyle={{ borderRadius: 12, border: "none", fontSize: 12 }}
                       formatter={(value: unknown) => {
                         const numValue = typeof value === 'number' ? value : 0;
-                        return [$${numValue} WPM, "Speed"];
+                        return [`${numValue} WPM`, "Speed"];
                       }}
                     />
                     <Line
@@ -316,4 +316,3 @@ export function ParentDashboardShell() {
     </div>
   );
 }
-
