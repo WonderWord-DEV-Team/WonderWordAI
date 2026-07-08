@@ -133,7 +133,7 @@ function SkillColumn({
   );
 }
 
-function GoalCard({ title, items }: { title: string[] }) {
+function GoalCard({ title, items }: { title: string; items: string[] }) {
   return (
     <div className="rounded-2xl bg-[#F5A65B] p-5 text-white">
       <h3 className="mb-3 text-sm font-bold">{title}</h3>
