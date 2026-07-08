@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS phonics_knowledge (
     id              UUID PRIMARY KEY DEFAULT  gen_random_uuid(),
     category        TEXT NOT NULL,          -- e.g. "sh-digraph"
     text            TEXT NOT NULL,          -- full text used for embedding
-    embedding       extensions.vector(384),  -- all-MiniLM-L6-v2 output
+    embedding       vector(384),  -- all-MiniLM-L6-v2 output
     example_words   TEXT[] NOT NULL,
     phonics_rule    TEXT NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS phonics_knowledge (
 -- HNSW index for fast approximate nearest-neighbour search
 CREATE INDEX IF NOT EXISTS idx_phonics_knowledge_embedding
     ON phonics_knowledge
-    USING hnsw (embedding extensions.vector_cosine_ops);
+    USING hnsw (embedding vector_cosine_ops);
 
 
 -- =============================================================================
