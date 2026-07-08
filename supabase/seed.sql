@@ -1,0 +1,3 @@
+-- Seed data that must exist for every environment lives in migrations.
+-- This file is intentionally present because supabase/config.toml runs it after
+-- `npx supabase db reset`.
