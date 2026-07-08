@@ -253,7 +253,10 @@ export function ParentDashboardShell() {
                     />
                     <Tooltip
                       contentStyle={{ borderRadius: 12, border: "none", fontSize: 12 }}
-                      formatter={(value: number) => [`${value} WPM`, "Speed"]}
+                      formatter={(value: unknown) => {
+                        const numValue = typeof value === 'number' ? value : 0;
+                        return [$${numValue} WPM, "Speed"];
+                      }}
                     />
                     <Line
                       type="monotone"
