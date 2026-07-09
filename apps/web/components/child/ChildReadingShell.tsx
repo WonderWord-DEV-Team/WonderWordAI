@@ -1,20 +1,35 @@
+import { SignOutButton } from "@/components/auth/SignOutButton";
 import { BrandHeader } from "@/components/shared/BrandHeader";
 import { MetricCard } from "@/components/shared/MetricCard";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { PlaceholderCard } from "@/components/shared/PlaceholderCard";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import type { AuthContext } from "@/lib/auth/types";
 
 type ChildReadingShellProps = {
+  auth: AuthContext;
   sessionId: string;
 };
 
 const sessionMetrics = ["Time", "Words read", "Accuracy"];
 
-export function ChildReadingShell({ sessionId }: ChildReadingShellProps) {
+export function ChildReadingShell({ auth, sessionId }: ChildReadingShellProps) {
+  const isDemoSession = sessionId === "demo-session";
+
   return (
     <main className="bg-[linear-gradient(180deg,rgb(255_249_241),rgb(255_240_226))]">
       <PageContainer className="py-6 sm:py-8">
         <BrandHeader variant="child" />
+
+        <section className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] border border-coral/20 bg-white/88 px-4 py-3 shadow-soft">
+          <div className="min-w-0 text-sm leading-6 text-muted">
+            <p className="truncate font-extrabold text-navy">{auth.email}</p>
+            <p className="text-xs font-black uppercase tracking-[0.12em] text-coral">
+              {auth.role}
+            </p>
+          </div>
+          <SignOutButton />
+        </section>
 
         <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
           <div className="min-w-0">
@@ -25,6 +40,11 @@ export function ChildReadingShell({ sessionId }: ChildReadingShellProps) {
             <p className="mt-3 break-words text-base leading-7 text-muted">
               Session ID: <span className="font-extrabold text-navy">{sessionId}</span>
             </p>
+            {isDemoSession ? (
+              <p className="mt-3 rounded-[var(--radius-card)] border border-coral/25 bg-coral/10 px-4 py-3 text-sm font-extrabold leading-6 text-navy">
+                Development only: this child account is temporarily routed to demo-session until real reading sessions are connected.
+              </p>
+            ) : null}
 
             <div className="mt-6 grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
               <PlaceholderCard title="Worksheet placeholder" className="min-h-[22rem] worksheet-lines">

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ChildReadingShell } from "@/components/child/ChildReadingShell";
+import { requireRole } from "@/lib/auth/server";
 
 type ChildReadPageProps = {
   params: {
@@ -11,6 +12,10 @@ export const metadata: Metadata = {
   title: "Reading Session"
 };
 
-export default function ChildReadPage({ params }: ChildReadPageProps) {
-  return <ChildReadingShell sessionId={params.sessionId} />;
+export const dynamic = "force-dynamic";
+
+export default async function ChildReadPage({ params }: ChildReadPageProps) {
+  const auth = await requireRole("CHILD");
+
+  return <ChildReadingShell auth={auth} sessionId={params.sessionId} />;
 }

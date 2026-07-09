@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { SignOutButton } from "@/components/auth/SignOutButton";
+import type { AuthContext } from "@/lib/auth/types";
 import {
   LineChart,
   Line,
@@ -162,7 +164,11 @@ function NextStepCard({ title, description }: { title: string; description: stri
 // Main shell
 // ---------------------------------------------------------------------------
 
-export function ParentDashboardShell() {
+type ParentDashboardShellProps = {
+  auth: AuthContext;
+};
+
+export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
   const [activeChildId, setActiveChildId] = useState(CHILDREN[0].id);
   const activeChild = CHILDREN.find((c) => c.id === activeChildId) ?? CHILDREN[0];
 
@@ -185,6 +191,13 @@ export function ParentDashboardShell() {
             <span className="flex items-center gap-1 text-sm font-semibold text-amber-500">
               🪙 1,240
             </span>
+            <div className="hidden text-right text-xs leading-5 text-slate-500 sm:block">
+              <p className="max-w-52 truncate font-bold text-slate-700">{auth.email}</p>
+              <p className="font-extrabold uppercase tracking-[0.12em] text-rose-500">
+                {auth.role}
+              </p>
+            </div>
+            <SignOutButton />
             <div className="h-8 w-8 overflow-hidden rounded-full bg-slate-200">
               <Image src="/avatar-placeholder.png" alt="Emma" width={32} height={32} className="h-full w-full object-cover" />
             </div>
