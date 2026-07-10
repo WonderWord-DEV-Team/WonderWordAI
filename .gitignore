@@ -2,6 +2,8 @@ __pycache__/
 *.py[cod]
 .vercel
 .env*
+.vscode/
+apps/ml-service/.cache/
 
 
 # Node / Next.js

@@ -1,3 +1,15 @@
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+@router.get("/embed-phonics")
+def get_phonics_knowledge():
+    return {
+        "phonics_knowledge": phonics_knowledge,
+    }
+
+
 #contains the phonics_knowledge
 
 phonics_knowledge = [
