@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from supabase_client import supabase
 from typing import Optional
+from activity import activity_call
 
 app = FastAPI()
 
@@ -44,3 +45,8 @@ def get_activity_recommendation(request: ActivityRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/Personalized-activity-recommendation")
+async def personalized_activity_recommendation(request: ActivityRequest):
+    return activity_call(request.phonics_category)
+
