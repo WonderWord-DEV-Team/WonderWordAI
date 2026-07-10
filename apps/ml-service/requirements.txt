@@ -4,5 +4,5 @@ python-multipart
 torch
 numpy
 sentence-transformers
-whisperx==3.3.1
+whisperx==3.2.0
 imageio-ffmpeg
