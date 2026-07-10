@@ -1,25 +1,15 @@
 from fastapi import FastAPI, HTTPException
-from sentence_transformers import SentenceTransformer
 from pydantic import BaseModel
 from supabase_client import supabase
 from typing import Optional
 
 app = FastAPI()
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
-
 @app.get("/health")
 def health():
     return {"status": "healthy"}
 
-@app.get("/health/embeddings")
-def health_embeddings():
-    test = model.encode("test")
-    return {
-        "status": "healthy",
-        "model": "all-MiniLM-L6-v2",
-        "embedding_dim": len(test)
-    }
+
 
 class ActivityRequest(BaseModel):
     phonics_category: str
