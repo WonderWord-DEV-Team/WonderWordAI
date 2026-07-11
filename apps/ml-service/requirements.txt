@@ -6,3 +6,4 @@ numpy
 sentence-transformers
 whisperx==3.2.0
 imageio-ffmpeg
+editdistance

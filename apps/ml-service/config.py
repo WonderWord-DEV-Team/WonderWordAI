@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 
-
 def _load_env_file() -> None:
     env_path = Path(__file__).with_name(".env")
 
@@ -24,3 +23,4 @@ MODEL_NAME = os.getenv("MODEL_NAME", "small")
 DEVICE = os.getenv("DEVICE", "cpu")
 ML_SERVICE_KEY = os.getenv("ML_SERVICE_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
+CONFIDENCE_THRESHOLD = 0.85
