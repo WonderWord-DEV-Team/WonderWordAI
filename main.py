@@ -21,32 +21,6 @@ class ActivityResponse(BaseModel):
     description: str
     pedagogy: str
 
-@app.post("/activity-recommendation", response_model=ActivityResponse)
-def get_activity_recommendation(request: ActivityRequest):
-    try:
-        response = (
-            supabase.table("activity_recommendations")
-            .select("*")
-            .eq("phonics_category", request.phonics_category)
-            .execute()
-        )
-        
-       
-        if not response.data:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No recommendation found for category: {request.phonics_category}"
-            )
-        
-       
-        return response.data[0]
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
-@app.post("/Personalized-activity-recommendation")
-async def personalized_activity_recommendation(request: ActivityRequest):
+@app.post("/activity-recommendation")
+async def get_activity_recommendation(request: ActivityRequest):
     return activity_call(request.phonics_category)
-
