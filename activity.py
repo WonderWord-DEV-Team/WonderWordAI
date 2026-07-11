@@ -1,6 +1,9 @@
 from supabase_client import supabase,Client
 from anthropic import Anthropic
+from dotenv import load_dotenv
 import os
+
+load_dotenv()
 
 anthropic = Anthropic(
     api_key=os.getenv("Anthropic_API_KEY")
@@ -20,6 +23,9 @@ def activity_call(phonics_category: str):
         }
 
     activity = response.data[0]
+    recommendation = call_claude(activity)
+
+    activity["recommendation"] = recommendation
 
     return activity
 
