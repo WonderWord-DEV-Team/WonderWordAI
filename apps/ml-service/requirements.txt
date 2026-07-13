@@ -6,3 +6,4 @@ numpy
 sentence-transformers
 whisperx==3.8.4
 imageio-ffmpeg
+supabase

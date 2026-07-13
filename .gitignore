@@ -3,6 +3,8 @@ __pycache__/
 .vercel
 .env*
 .vscode/
+venv/
+rough.py
 apps/ml-service/.cache/
 
 
