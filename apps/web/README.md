@@ -23,6 +23,14 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 The web app exposes authenticated reading-session routes backed by `public.reading_sessions`.
 Authorization is enforced through Supabase Auth, `public.users.role`, and active RLS policies.
 
+Required environment variables:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `ANTHROPIC_API_KEY`
+
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` is still accepted by the local helper for older environments, but new setup should use `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+
 ### `POST /api/sessions`
 
 Creates a new open reading session for the authenticated child. The request body must be an empty JSON object or omitted.
@@ -111,6 +119,68 @@ Common errors:
 { "error": "not_found", "message": "Reading session not found." }
 { "error": "invalid_request", "message": "The request payload is invalid." }
 ```
+
+## Worksheet Upload API
+
+`POST /api/upload` accepts a multipart form request for an authenticated child user. It reuses the existing OCR endpoint and does not persist raw worksheet images.
+
+Form fields:
+
+- `sessionId`: UUID for an open reading session owned by the authenticated child.
+- `file`: JPEG, PNG, or WebP image, larger than 0 bytes and no more than 10 MB.
+
+Success `200 OK`:
+
+```json
+{
+  "data": {
+    "sessionId": "40000000-0000-0000-0000-000000000001",
+    "text": "Extracted worksheet text",
+    "imageKeywords": ["bird", "tree"]
+  }
+}
+```
+
+Failure responses use a stable shape:
+
+```json
+{
+  "error": {
+    "code": "invalid_file_type",
+    "message": "Please upload a JPEG, PNG, or WebP image."
+  }
+}
+```
+
+Common status codes:
+
+- `400`: missing session ID, invalid session ID, missing file, empty file, or unsupported file type.
+- `401`: missing or invalid Supabase auth session.
+- `403`: authenticated account is not a child account.
+- `404`: reading session does not exist or is not visible to the authenticated child.
+- `409`: reading session is already closed.
+- `413`: image is larger than 10 MB.
+- `502`, `503`, `504`: Claude OCR returned malformed output, is unavailable, is rate-limited, or timed out.
+
+Privacy and retention:
+
+- Raw worksheet images are not written to Supabase Storage, disk, logs, or the database.
+- The server holds image bytes only in memory for the request-scoped Anthropic OCR call.
+- The API never returns base64 image data to the browser.
+- Server logs include operational OCR error metadata only, not image contents or model raw output.
+
+Manual worksheet upload verification:
+
+- Desktop Chrome file upload with a JPEG, PNG, and WebP image.
+- Mobile-sized Chrome responsive mode using the file input with camera capture available.
+- Camera permission denied while file-input fallback remains available.
+- Replace or retake the selected image.
+- Unsupported file type rejection.
+- File larger than 10 MB rejection.
+- Successful OCR transitions to the reading text view.
+- OCR upstream failure returns a stable error message and keeps the session open for retry.
+- Duplicate clicks are disabled while upload/OCR is running.
+- Refresh after OCR does not restore worksheet text because raw images and OCR text are not persisted.
 
 Manual verification examples:
 
