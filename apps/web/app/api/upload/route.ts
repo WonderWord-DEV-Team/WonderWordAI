@@ -1,184 +1,202 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { parseUserRole } from "@/lib/auth/types";
+import { extractWorksheetText, mapOcrUpstreamError } from "@/lib/ocr/client";
+import {
+  isAllowedImageType,
+  validateWorksheetImageFile,
+  type OcrErrorBody,
+  type OcrErrorCode
+} from "@/lib/ocr/schema";
+import { hasSupabaseEnv } from "@/lib/supabase/env";
+import { createClient } from "@/lib/supabase/server";
+import { READING_SESSION_SELECT, sessionIdSchema, type ReadingSessionRow } from "@/lib/sessions/api";
 
 export const dynamic = "force-dynamic";
 
+type AppUser = {
+  id: string;
+  role: "CHILD" | "PARENT";
+};
+
 export async function POST(request: NextRequest) {
+  if (!hasSupabaseEnv()) {
+    return errorResponse("configuration_error", "Supabase is not configured.", 500);
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+
+  if (!apiKey) {
+    return errorResponse("configuration_error", "Worksheet scanning is not configured.", 500);
+  }
+
+  let formData: FormData;
+
   try {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        {
-          error: "anthropic_key_missing",
-          message: "Anthropic API Key is not configured in environment variables."
-        },
-        { status: 500 }
-      );
-    }
+    formData = await request.formData();
+  } catch (error) {
+    console.error("Failed to read worksheet upload form data.", error);
 
-    const formData = await request.formData();
-    const file = formData.get("file") as File | null;
+    return errorResponse("invalid_session", "The upload request is invalid.", 400);
+  }
 
-    if (!file) {
-      return NextResponse.json(
-        {
-          error: "file_missing",
-          message: "No file was uploaded. Please send a file field in form-data."
-        },
-        { status: 400 }
-      );
-    }
+  const sessionId = formData.get("sessionId");
 
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json(
-        {
-          error: "invalid_file_type",
-          message: `Unsupported image type. Allowed types: ${allowedTypes.join(", ")}`
-        },
-        { status: 400 }
-      );
-    }
+  if (typeof sessionId !== "string" || !sessionId.trim()) {
+    return errorResponse("session_missing", "A reading session is required.", 400);
+  }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const base64Image = buffer.toString("base64");
+  const parsedSessionId = sessionIdSchema.safeParse(sessionId);
 
-    const anthropic = new Anthropic({ apiKey });
+  if (!parsedSessionId.success) {
+    return errorResponse("invalid_session", "The reading session is invalid.", 400);
+  }
 
-    const promptText = `You are an OCR engine.
+  const file = formData.get("file");
+  const worksheetFile = file instanceof File ? file : null;
+  const fileError = validateWorksheetImageFile(worksheetFile);
 
-Extract all visible text exactly as it appears.
+  if (fileError) {
+    return errorResponse(fileError.code, fileError.message, fileError.status);
+  }
 
-Rules:
-- Preserve every visible character exactly as it appears, including spelling, punctuation, capitalization, singular/plural forms, numbering, spacing, and line breaks.
-- Never correct, rewrite, paraphrase, infer, or complete missing text.
-- Never modify multiple-choice questions or answers.
-- If text is unreadable, replace only that part with "[unclear]".
-- Ignore decorations and illustrations unless they contain text.
+  if (!worksheetFile || !isAllowedImageType(worksheetFile.type)) {
+    return errorResponse("invalid_file_type", "Please upload a JPEG, PNG, or WebP image.", 400);
+  }
 
-After extraction, generate up to 7 image keywords.
+  const supabase = createClient();
+  const { appUser, response } = await getAuthenticatedChildUser(supabase);
 
-Keyword rules:
-- Use only concepts explicitly mentioned in the text.
-- Choose visual concepts useful for image generation.
-- Prefer people, objects, animals, places, actions, and colors.
-- Keep keywords to 1–3 words.
+  if (response) {
+    return response;
+  }
 
-Good: birthday party, red balloon, pig, farm, school bus
-Bad: worksheet, reading comprehension, education, exercise, question
+  const { data: session, error: sessionError } = await supabase
+    .from("reading_sessions")
+    .select(READING_SESSION_SELECT)
+    .eq("id", parsedSessionId.data)
+    .maybeSingle<ReadingSessionRow>();
 
-Return ONLY this JSON:
+  if (sessionError) {
+    console.error("Failed to fetch reading session for worksheet upload.", sessionError);
 
-{
-  "text": "...",
-  "image_keywords": ["keyword1", "keyword2"]
-}`;
+    return errorResponse("internal_error", "Unable to verify the reading session.", 500);
+  }
 
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 2000,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: file.type as any,
-                data: base64Image
-              }
-            },
-            {
-              type: "text",
-              text: promptText
-            }
-          ]
-        }
-      ]
+  if (!session || session.child_id !== appUser.id) {
+    return errorResponse("not_found", "Reading session not found.", 404);
+  }
+
+  if (session.end_time) {
+    return errorResponse("session_closed", "This reading session is already closed.", 409);
+  }
+
+  try {
+    const buffer = Buffer.from(await worksheetFile.arrayBuffer());
+    const ocrResult = await extractWorksheetText({
+      apiKey,
+      base64Image: buffer.toString("base64"),
+      mediaType: worksheetFile.type
     });
 
-    const contentBlock = response.content[0];
-    if (contentBlock.type !== "text") {
-      throw new Error("Unexpected response type from Anthropic API.");
-    }
-
-    const rawOutput = contentBlock.text.trim();
-
-    let parsedData;
-    try {
-      const jsonMatch = rawOutput.match(/\{[\s\S]*\}/);
-      const cleanedJson = jsonMatch ? jsonMatch[0] : rawOutput;
-      parsedData = JSON.parse(cleanedJson);
-    } catch (parseError) {
-      console.error("Failed to parse Claude output as JSON:", rawOutput);
-      return NextResponse.json(
-        {
-          error: "ocr_parse_failed",
-          message: "Failed to parse OCR response as structured JSON data.",
-          rawOutput
-        },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(parsedData);
-  } catch (error: any) {
-    console.error("OCR Route error:", error);
-
-    if (error instanceof Anthropic.APIError) {
-      const status = error.status;
-      const errorMessage = (error.message || "").toLowerCase();
-      const errorType = (error.type || "").toLowerCase();
-
-      let friendlyMessage = error.message;
-      let errorCategory = "anthropic_api_error";
-
-      if (
-        status === 429 ||
-        errorMessage.includes("credit") ||
-        errorMessage.includes("billing") ||
-        errorMessage.includes("quota") ||
-        errorType.includes("credit") ||
-        errorType.includes("rate_limit")
-      ) {
-        errorCategory = "insufficient_credits_or_rate_limit";
-        friendlyMessage = "Anthropic API: Insufficient credits or rate limit exceeded.";
-      } else if (
-        status === 400 &&
-        (errorMessage.includes("model") ||
-          errorMessage.includes("not found") ||
-          errorMessage.includes("unknown") ||
-          errorMessage.includes("supported"))
-      ) {
-        errorCategory = "model_not_found_or_discontinued";
-        friendlyMessage = `Anthropic API: The model may be discontinued or invalid. Detail: ${error.message}`;
-      } else if (status === 401 || status === 403) {
-        errorCategory = "authentication_error";
-        friendlyMessage = "Anthropic API: Authentication or permission error. Check your API Key.";
+    return NextResponse.json({
+      data: {
+        sessionId: session.id,
+        text: ocrResult.text,
+        imageKeywords: ocrResult.image_keywords
       }
+    });
+  } catch (error) {
+    logOcrError(error);
 
-      return NextResponse.json(
-        {
-          error: errorCategory,
-          message: friendlyMessage,
-          details: {
-            status,
-            type: error.type,
-            rawMessage: error.message
-          }
-        },
-        { status: status || 500 }
-      );
-    }
+    const stableError = mapOcrUpstreamError(error);
 
-    return NextResponse.json(
-      {
-        error: "internal_error",
-        message: error.message || "An unexpected error occurred during OCR processing."
-      },
-      { status: 500 }
-    );
+    return errorResponse(stableError.code, stableError.message, stableError.status);
   }
+}
+
+async function getAuthenticatedChildUser(
+  supabase: ReturnType<typeof createClient>
+): Promise<
+  | { appUser: AppUser; response: null }
+  | { appUser: null; response: NextResponse<OcrErrorBody> }
+> {
+  const {
+    data: { user },
+    error: userError
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return {
+      appUser: null,
+      response: errorResponse("unauthorized", "Authentication is required.", 401)
+    };
+  }
+
+  const { data: appUserRow, error: appUserError } = await supabase
+    .from("users")
+    .select("id, auth_id, role")
+    .eq("auth_id", user.id)
+    .maybeSingle();
+
+  if (appUserError) {
+    console.error("Failed to resolve authenticated application user for worksheet upload.", appUserError);
+
+    return {
+      appUser: null,
+      response: errorResponse("internal_error", "Unable to resolve the authenticated user.", 500)
+    };
+  }
+
+  const role = parseUserRole(appUserRow?.role);
+
+  if (!appUserRow || !role) {
+    return {
+      appUser: null,
+      response: errorResponse("forbidden", "This account is not authorized.", 403)
+    };
+  }
+
+  if (role !== "CHILD") {
+    return {
+      appUser: null,
+      response: errorResponse("forbidden", "Only child accounts can scan worksheets.", 403)
+    };
+  }
+
+  return {
+    appUser: {
+      id: appUserRow.id,
+      role
+    },
+    response: null
+  };
+}
+
+function errorResponse(code: OcrErrorCode, message: string, status: number) {
+  return NextResponse.json<OcrErrorBody>({ error: { code, message } }, { status });
+}
+
+function logOcrError(error: unknown) {
+  if (error instanceof Anthropic.APIError) {
+    console.error("Anthropic OCR request failed.", {
+      status: error.status,
+      type: error.type,
+      requestID: error.requestID,
+      message: error.message
+    });
+
+    return;
+  }
+
+  if (error instanceof Error) {
+    console.error("Worksheet OCR failed.", {
+      name: error.name,
+      message: error.message
+    });
+
+    return;
+  }
+
+  console.error("Worksheet OCR failed with unknown error type.");
 }
