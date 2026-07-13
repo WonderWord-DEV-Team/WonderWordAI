@@ -24,12 +24,6 @@ export async function POST(request: NextRequest) {
     return errorResponse("configuration_error", "Supabase is not configured.", 500);
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
-    return errorResponse("configuration_error", "Worksheet scanning is not configured.", 500);
-  }
-
   let formData: FormData;
 
   try {
@@ -89,6 +83,12 @@ export async function POST(request: NextRequest) {
 
   if (session.end_time) {
     return errorResponse("session_closed", "This reading session is already closed.", 409);
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+
+  if (!apiKey) {
+    return errorResponse("configuration_error", "Worksheet scanning is not configured.", 500);
   }
 
   try {
