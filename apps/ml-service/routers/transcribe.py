@@ -60,7 +60,8 @@ async def transcribe(
                 if "word" not in item:
                     continue
 
-                word = words.append(item["word"].strip())
+                word = item["word"].strip()
+                words.append(word)
                 timestamps.append(item.get("start"))
                 score = item.get("score", 1.0)
                 if score < CONFIDENCE_THRESHOLD:
