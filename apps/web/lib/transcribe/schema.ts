@@ -1,15 +1,16 @@
-import {z} from "zod";
+import { z } from "zod";
 
 export const transcribeMiscueSchema = z
     .object({
         word: z.string(),
+        expected_phonemes: z.string(),
         actual_phonemes: z.string(),
     })
     .strict();
 
 export const transcribeSegmentSchema = z
     .object({
-        text: z.string(0),
+        text: z.string(),
         start: z.number().nullable().optional(),
         end: z.number().nullable().optional()
     })
@@ -26,11 +27,12 @@ export const transcribeResultSchema = z
     .strict();
 
 export type TranscribeResult = z.infer<typeof transcribeResultSchema>
+
 export const ALLOWED_AUDIO_TYPES = ["audio/webm", "audio/wav"] as const;
 
 export type AllowedAudioType = (typeof ALLOWED_AUDIO_TYPES)[number];
 
 export function isAllowedAudioType(type: string): type is AllowedAudioType {
-  return ALLOWED_AUDIO_TYPES.includes(type as AllowedAudioType);
+        return ALLOWED_AUDIO_TYPES.includes(type as AllowedAudioType);
 }
 
