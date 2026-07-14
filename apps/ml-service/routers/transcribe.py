@@ -6,6 +6,8 @@ from typing import Annotated
 from fastapi import APIRouter, File, Header, HTTPException, UploadFile
 from starlette.concurrency import run_in_threadpool
 
+from config import CONFIDENCE_THRESHOLD
+
 from services.whisper_service import WhisperModelLoadError, transcribe_audio
 
 router = APIRouter()
@@ -38,6 +40,7 @@ async def transcribe(
         words = []
         timestamps = []
         segments = []
+        miscues = []
 
         for segment in result.get("segments", []):
             segment_text = segment.get("text", "").strip()
@@ -57,15 +60,23 @@ async def transcribe(
                 if "word" not in item:
                     continue
 
-                words.append(item["word"].strip())
+                word = item["word"].strip()
+                words.append(word)
                 timestamps.append(item.get("start"))
+                score = item.get("score", 1.0)
+                if score < CONFIDENCE_THRESHOLD:
+                    miscues.append({
+                        "word": word,
+                        "expected_phonemes": "",
+                        "actual_phonemes": "",
+                    })                      
 
         return {
             "words": words,
             "timestamps": timestamps,
             "transcript": " ".join(segment["text"] for segment in segments),
             "segments": segments,
-            "miscues": [],
+            "miscues": miscues,
         }
     finally:
         if temp_path and os.path.exists(temp_path):
