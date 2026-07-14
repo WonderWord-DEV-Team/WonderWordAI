@@ -1,4 +1,4 @@
-#listen child, this file shall only run once, if you see this it has ran once, do not run this file again, i repeat: no running the file again, if you shall, may the curse of Ra befall you
+#listen child, this file shall only run once, if you see this it has ran once, do not run this file again unless the previous ones are deleted, i repeat: no running the file again, if you shall, may the curse of Ra befall you
 
 import os
 import sys
@@ -31,7 +31,7 @@ phonics_knowledge = [
     {
         "id": "short-a-1",
         "category": "short-a",
-        "text": "short-a: short vowel A sound in cat, map, sat, bag, fan, cap",
+        "text": "short-a: brief clipped A sound in CVC words, cat map sat bag, vowel between two consonants makes short sound",
         "phonics_rule": "Short A makes the /a/ sound as in 'cat'. It appears in simple CVC words (consonant-vowel-consonant) and is the first vowel sound children learn.",
         "example_words": ["cat", "map", "sat", "bag", "fan", "cap", "hat", "rat", "man", "pan"]
     },
@@ -89,9 +89,9 @@ phonics_knowledge = [
     {
         "id": "wh-1",
         "category": "wh-digraph",
-        "text": "wh-digraph: WH sound in what, when, where, who, why",
+        "text": "wh-digraph: WH sound in what, when, where, why",
         "phonics_rule": "WH is a consonant digraph — two letters W and H that together make one sound /wh/. The individual W and H sounds disappear completely.",
-        "example_words": ["what", "when", "where", "who", "why"]
+        "example_words": ["what", "when", "where", "why"]
     },
     {
         "id": "ph-1",
@@ -126,9 +126,9 @@ phonics_knowledge = [
     {
         "id": "long-a-1",
         "category": "long-a",
-        "text": "long-a: silent-e pattern in cake, bake, gate, name, same",
+        "text": "long-a: magic-e rule, silent e at end makes vowel say its name, vowel-consonant-e pattern, rake cake bake gate name same late fate",
         "phonics_rule": "Long A uses the silent-e pattern (a_e) — the final E is silent but makes the A say its name /ay/. Remove the E and the vowel goes short.",
-        "example_words": ["cake", "bake", "gate", "name", "same"]
+        "example_words": ["cake", "bake", "gate", "name", "same", "late", "fate"]
     },
     {
         "id": "long-i-1",
