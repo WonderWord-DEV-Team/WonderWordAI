@@ -4,6 +4,7 @@ python-multipart
 torch
 numpy
 sentence-transformers
-whisperx==3.2.0
+whisperx==3.8.4
 imageio-ffmpeg
 editdistance
+supabase

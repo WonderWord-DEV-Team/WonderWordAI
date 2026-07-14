@@ -1,17 +1,30 @@
-from fastapi import APIRouter
+#listen child, this file shall only run once, if you see this it has ran once, do not run this file again, i repeat: no running the file again, if you shall, may the curse of Ra befall you
 
-router = APIRouter()
+import os
+import sys
+from sentence_transformers import SentenceTransformer
+from supabase import create_client
+from dotenv import load_dotenv
 
+load_dotenv(dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-@router.get("/embed-phonics")
-def get_phonics_knowledge():
-    return {
-        "phonics_knowledge": phonics_knowledge,
-    }
+url = os.environ.get("SUPABASE_URL")
+key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
+if not url:
+    print("SUPABASE_URL is not set in the environment variables.")
+    sys.exit(1)
 
+if not key:
+    print("SUPABASE_SERVICE_ROLE_KEY is not set in the environment variables.")
+    sys.exit(1)
+
+supabase = create_client(url, key)
+
+print("model loadinggggg")
+model = SentenceTransformer('all-MiniLM-L6-v2')
+print("model loadedddddd yahoo")
 #contains the phonics_knowledge
-
 phonics_knowledge = [
 
     #Kindergarten Phonics (4 rules): short-a, short-i, short-o, short-u
@@ -234,3 +247,18 @@ phonics_knowledge = [
         "example_words": ["calm", "half", "talk", "walk", "yolk"]
     }
 ]
+
+for entry in phonics_knowledge:
+    embedding = model.encode(entry["text"]).tolist()
+
+    supabase.table('phonics_knowledge').insert({
+        'category': entry['category'],
+        'text': entry['text'],
+        'phonics_rule': entry['phonics_rule'],
+        'example_words': entry['example_words'],
+        'embedding': embedding
+    }).execute()
+
+    print(f"Stored: {entry['id']}")
+
+print(f"\nDone! {len(phonics_knowledge)} phonics rules embedded and stored in pgvector.")
