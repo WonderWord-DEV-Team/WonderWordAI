@@ -1,9 +1,11 @@
 from fastapi import FastAPI
 from sentence_transformers import SentenceTransformer
 
+from services.wav2vec_service import load_wav2vec_model
 from services.whisper_service import load_whisper_model
 from middleware.auth import InternalKeyMiddleware
-from routers.transcribe import router
+from routers.detect_miscue import router as detect_miscue_router
+from routers.transcribe import router as transcribe_router
 
 app = FastAPI()
 
@@ -15,13 +17,16 @@ embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 def startup():
     # Load WhisperX model once
     load_whisper_model()
+    # Load Wav2Vec2 model once
+    load_wav2vec_model()
 
 
 # Register middleware
 app.add_middleware(InternalKeyMiddleware)
 
 # Register routers
-app.include_router(router)
+app.include_router(transcribe_router)
+app.include_router(detect_miscue_router)
 
 
 @app.get("/health")

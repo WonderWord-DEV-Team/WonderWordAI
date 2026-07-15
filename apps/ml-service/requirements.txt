@@ -2,6 +2,8 @@ fastapi
 uvicorn[standard]
 python-multipart
 torch
+transformers
+phonemizer
 numpy
 sentence-transformers
 whisperx==3.8.4
