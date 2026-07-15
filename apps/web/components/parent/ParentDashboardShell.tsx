@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { useParentDashboard } from "@/hooks/useParentDashboard";
 import type { AuthContext } from "@/lib/auth/types";
+import {
+  type ParentDashboardChild,
+  type ParentDashboardPeriod,
+  type ParentDashboardRecentSession
+} from "@/lib/parent/dashboard";
 import {
   LineChart,
   Line,
@@ -11,70 +16,21 @@ import {
   YAxis,
   CartesianGrid,
   ResponsiveContainer,
-  Tooltip,
+  Tooltip
 } from "recharts";
-import { Lightbulb, Rocket } from "lucide-react";
+import { AlertTriangle, BookOpen, CalendarDays, Lightbulb, Rocket } from "lucide-react";
 
-//items below need to be swapped out for actual data (dummy data right now)
-type ChildProfile = {
-  id: string;
-  name: string;
-  avatarUrl?: string;
-};
-
-const CHILDREN: ChildProfile[] = [
-  { id: "emma", name: "Emma" },
-  { id: "leo", name: "Leo" },
+const PERIOD_OPTIONS: { label: string; value: ParentDashboardPeriod }[] = [
+  { label: "7 days", value: "7d" },
+  { label: "14 days", value: "14d" },
+  { label: "30 days", value: "30d" },
+  { label: "All", value: "all" }
 ];
 
-const READING_SPEED_DATA = [
-  { week: "Week 1", wpm: 46 },
-  { week: "Week 2", wpm: 51 },
-  { week: "Week 3", wpm: 47 },
-  { week: "Week 4", wpm: 56 },
-  { week: "Week 5", wpm: 65 },
-];
-
-const OVERVIEW_INSIGHTS = [
-  "Emma hit her reading goal all 5 days this week — a new streak!",
-  "Her speed jumped 7 WPM since last week, putting her ahead of grade level.",
-  "SH and TH digraphs are her current focus area — see recommendations below.",
-  "Accuracy is strong at 95% — most errors are on multisyllabic words.",
-];
-
-const TREND_INSIGHTS = [
-  "Emma's been on a steady upward trend since Week 3 — great momentum.",
-  "The small dip in Week 3 happened after a longer break between sessions.",
-  "At this pace she'll hit 75 WPM by end of month — above Grade 2 target.",
-];
-
-const STRONG_SKILLS = ["Sight words", "Short vowels", "CVC words", "Letter blends (bl, cr)"];
-const NEEDS_PRACTICE = ["Long vowel pairs (oa, ee)", "R-controlled vowels", "Silent e words"];
-const FOCUS_AREA = ["SH digraph", "TH digraph", "Multisyllabic words"];
-
-const FOCUS_THIS_WEEK = ["SH sounds (ship, fish, shell)", "TH sounds (this, that, with)", "2-syllable words (basket, napkin)"];
-const NEXT_GOALS = ["Long vowel pairs (rain, boat)", "Vowel teams", "Reach 70 WPM (currently 65)"];
-
-const NEXT_STEPS = [
-  {
-    title: "Shadow Puppet SH Game",
-    description: 'Make hand shadows and say SH words as the puppet "speaks" — ship, shell, shout. Takes about 10 min.',
-  },
-  {
-    title: "TH Tongue Tickler",
-    description: 'Practice "th" sounds by reading silly tongue twisters together — the thick thorn, that thin thread.',
-  },
-  {
-    title: "Syllable Clap Game",
-    description: "Say a word, clap each syllable together. Try basket, pencil, dinner, monkey. Race to clap fastest.",
-  },
-];
-
-//small presentation helpers:
 function StatCard({
   label,
   value,
-  note,
+  note
 }: {
   label: string;
   value: string;
@@ -84,97 +40,135 @@ function StatCard({
     <div className="rounded-2xl bg-[#F5A65B] px-5 py-4 text-white shadow-sm">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">{label}</p>
       <p className="mt-1 text-3xl font-bold leading-tight">{value}</p>
-      {note && <p className="mt-1 text-xs text-white/85">{note}</p>}
+      {note ? <p className="mt-1 text-xs text-white/85">{note}</p> : null}
     </div>
   );
 }
 
-function InsightsPanel({ items }: { items: string[] }) {
+function SummaryPanel({ child }: { child: ParentDashboardChild }) {
+  const { metrics } = child;
+  const latestSession = metrics.latestSessionAt
+    ? `Latest session: ${formatDateTime(metrics.latestSessionAt)}`
+    : "No completed session activity in this period.";
+  const accuracy = formatAccuracy(metrics.accuracyPct);
+
   return (
     <div className="rounded-2xl border-2 border-dashed border-rose-300/70 bg-white p-5">
       <div className="mb-3 flex items-center gap-2">
         <Lightbulb className="h-4 w-4 fill-amber-400 text-amber-400" />
-        <h3 className="text-sm font-bold text-slate-900">Insights</h3>
+        <h3 className="text-sm font-bold text-slate-900">Summary</h3>
       </div>
       <ul className="space-y-2.5">
-        {items.map((item, i) => (
-          <li key={i} className="flex gap-2 text-[13px] leading-snug text-slate-600">
-            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />
-            <span>{item}</span>
-          </li>
-        ))}
+        <li className="flex gap-2 text-[13px] leading-snug text-slate-600">
+          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />
+          <span>{latestSession}</span>
+        </li>
+        <li className="flex gap-2 text-[13px] leading-snug text-slate-600">
+          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />
+          <span>
+            {child.name} has read {metrics.totalWords.toLocaleString()} words with {accuracy} accuracy.
+          </span>
+        </li>
       </ul>
     </div>
   );
 }
 
-function SkillColumn({
+function DashboardMessage({
   title,
-  dotColor,
-  items,
+  description,
+  tone = "neutral"
 }: {
   title: string;
-  dotColor: string;
-  items: string[];
+  description: string;
+  tone?: "neutral" | "error";
 }) {
+  const Icon = tone === "error" ? AlertTriangle : BookOpen;
+
   return (
-    <div>
-      <div className="mb-3 flex items-center gap-2">
-        <span className={`h-2.5 w-2.5 rounded-full ${dotColor}`} />
-        <h3 className="text-sm font-bold text-slate-900">{title}</h3>
+    <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+      <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-rose-50 text-rose-500">
+        <Icon className="h-6 w-6" />
       </div>
-      <ul className="space-y-1.5">
-        {items.map((item) => (
-          <li key={item} className="flex gap-2 text-[13px] text-slate-600">
-            <span className="text-slate-400">•</span>
-            <span>{item}</span>
+      <h2 className="mt-4 text-xl font-extrabold text-slate-900">{title}</h2>
+      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">{description}</p>
+    </section>
+  );
+}
+
+function RecentSessionsList({ sessions }: { sessions: ParentDashboardRecentSession[] }) {
+  if (sessions.length === 0) {
+    return (
+      <DashboardMessage
+        title="No sessions in this period"
+        description="When linked children complete reading sessions, the newest sessions will appear here."
+      />
+    );
+  }
+
+  return (
+    <div className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm">
+      <div className="border-b border-slate-100 px-5 py-4">
+        <h3 className="text-sm font-bold text-slate-900">Recent Sessions</h3>
+      </div>
+      <ul className="divide-y divide-slate-100">
+        {sessions.map((session) => (
+          <li key={session.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+            <div>
+              <p className="text-sm font-bold text-slate-900">{formatDateTime(session.startTime)}</p>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                {session.status}
+              </p>
+            </div>
+            <p className="text-sm font-semibold text-slate-600">
+              {session.totalWords.toLocaleString()} words
+            </p>
+            <p className="text-sm font-semibold text-slate-600">
+              {formatSessionAccuracy(session)}
+            </p>
           </li>
         ))}
       </ul>
     </div>
   );
 }
-
-function GoalCard({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div className="rounded-2xl bg-[#F5A65B] p-5 text-white">
-      <h3 className="mb-3 text-sm font-bold">{title}</h3>
-      <ul className="space-y-1.5">
-        {items.map((item) => (
-          <li key={item} className="flex gap-2 text-[13px] leading-snug text-white/95">
-            <span className="mt-0.5 text-white/80">•</span>
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function NextStepCard({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="rounded-2xl bg-[#E8695E] p-5 text-white">
-      <h4 className="mb-2 text-[15px] font-bold leading-snug">{title}</h4>
-      <p className="text-[13px] leading-snug text-white/90">{description}</p>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Main shell
-// ---------------------------------------------------------------------------
 
 type ParentDashboardShellProps = {
   auth: AuthContext;
 };
 
 export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
-  const [activeChildId, setActiveChildId] = useState(CHILDREN[0].id);
-  const activeChild = CHILDREN.find((c) => c.id === activeChildId) ?? CHILDREN[0];
+  const [period, setPeriod] = useState<ParentDashboardPeriod>("30d");
+  const [activeChildId, setActiveChildId] = useState<string | null>(null);
+  const dashboardQuery = useParentDashboard(period);
+  const children = dashboardQuery.data?.children ?? [];
+
+  useEffect(() => {
+    if (children.length === 0) {
+      setActiveChildId(null);
+      return;
+    }
+
+    if (!children.some((child) => child.id === activeChildId)) {
+      setActiveChildId(children[0].id);
+    }
+  }, [activeChildId, children]);
+
+  const activeChild = children.find((child) => child.id === activeChildId) ?? children[0];
+  const chartData = useMemo(
+    () =>
+      activeChild?.recentSessions
+        .slice()
+        .reverse()
+        .map((session) => ({
+          session: formatDate(session.startTime),
+          words: session.totalWords
+        })) ?? [],
+    [activeChild]
+  );
 
   return (
     <div className="min-h-screen bg-[#F4F1EA]">
-      {/* Top nav */}
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-1.5 text-lg font-bold text-rose-500">
@@ -188,9 +182,6 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
             <a href="#" className="font-semibold text-rose-500">Diagnostics</a>
           </nav>
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1 text-sm font-semibold text-amber-500">
-              🪙 1,240
-            </span>
             <div className="hidden text-right text-xs leading-5 text-slate-500 sm:block">
               <p className="max-w-52 truncate font-bold text-slate-700">{auth.email}</p>
               <p className="font-extrabold uppercase tracking-[0.12em] text-rose-500">
@@ -198,120 +189,168 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
               </p>
             </div>
             <SignOutButton />
-            <div className="h-8 w-8 overflow-hidden rounded-full bg-slate-200">
-              <Image src="/avatar-placeholder.png" alt="Emma" width={32} height={32} className="h-full w-full object-cover" />
+            <div className="grid h-8 w-8 place-items-center rounded-full bg-rose-100 text-xs font-black text-rose-500">
+              {auth.role.slice(0, 1)}
             </div>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-8">
-        {/* Child switcher */}
-        <div className="mb-6 flex items-center gap-4">
-          <div className="flex rounded-full bg-slate-100 p-1">
-            {CHILDREN.map((child) => (
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap gap-2 rounded-full bg-slate-100 p-1">
+            {PERIOD_OPTIONS.map((option) => (
               <button
-                key={child.id}
-                onClick={() => setActiveChildId(child.id)}
+                key={option.value}
+                type="button"
+                onClick={() => setPeriod(option.value)}
                 className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                  child.id === activeChildId
+                  option.value === period
                     ? "bg-rose-400 text-white shadow-sm"
                     : "text-slate-500 hover:text-slate-700"
                 }`}
               >
-                {child.name}
+                {option.label}
               </button>
             ))}
           </div>
-          <span className="text-sm text-slate-500">
-            Viewing <span className="font-semibold text-rose-500">{activeChild.name}&apos;s</span> Dashboard
+          <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500">
+            <CalendarDays className="h-4 w-4" />
+            {period === "all" ? "All sessions" : `Last ${period.replace("d", " days")}`}
           </span>
         </div>
 
-        {/* Title */}
-        <h1 className="text-3xl font-extrabold text-slate-900">{activeChild.name}&apos;s Reading Journey</h1>
-        <p className="mt-1 text-sm text-slate-500">Week of Nov 4–10, 2025 · Last session: 2 hours ago</p>
-
-        {/* Progress overview */}
-        <section className="mt-8">
-          <h2 className="mb-4 text-lg font-bold text-slate-900">Progress Overview:</h2>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-            <div className="grid grid-cols-2 gap-4">
-              <StatCard label="Reading Speed" value="65 WPM" note="↑ +7 from last week" />
-              <StatCard label="Accuracy" value="95%" note="↑ +3% improvement" />
-              <StatCard label="Sessions" value="5 this week" note="Goal: 5 sessions ✓ Complete" />
-              <StatCard label="Words Read" value="1,240" note="↑ Best week yet!" />
-            </div>
-            <InsightsPanel items={OVERVIEW_INSIGHTS} />
-          </div>
-        </section>
-
-        {/* Chart + trend insights */}
-        <section className="mt-6 rounded-3xl bg-[#FBEBD3] p-6">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-            <div className="rounded-2xl bg-[#F5C48A] p-5">
-              <h3 className="mb-4 text-sm font-bold text-slate-900">Reading Speed Over Time</h3>
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={READING_SPEED_DATA} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.4)" />
-                    <XAxis dataKey="week" tick={{ fontSize: 12, fill: "#5c4322" }} axisLine={false} tickLine={false} />
-                    <YAxis
-                      domain={[40, 100]}
-                      ticks={[40, 60, 80, 100]}
-                      tick={{ fontSize: 12, fill: "#5c4322" }}
-                      axisLine={false}
-                      tickLine={false}
-                      label={{ value: "Words per minute", angle: -90, position: "insideLeft", style: { fontSize: 11, fill: "#5c4322" } }}
-                    />
-                    <Tooltip
-                      contentStyle={{ borderRadius: 12, border: "none", fontSize: 12 }}
-                      formatter={(value: unknown) => {
-                        const numValue = typeof value === 'number' ? value : 0;
-                        return [`${numValue} WPM`, "Speed"];
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="wpm"
-                      stroke="#ffffff"
-                      strokeWidth={3}
-                      dot={{ r: 5, fill: "#ffffff", stroke: "#E8695E", strokeWidth: 2 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+        {dashboardQuery.isLoading ? (
+          <DashboardMessage
+            title="Loading dashboard"
+            description="Reading session metrics are being loaded for your linked children."
+          />
+        ) : dashboardQuery.isError ? (
+          <DashboardMessage
+            title="Dashboard unavailable"
+            description={
+              dashboardQuery.error instanceof Error
+                ? dashboardQuery.error.message
+                : "Unable to load the parent dashboard."
+            }
+            tone="error"
+          />
+        ) : children.length === 0 ? (
+          <DashboardMessage
+            title="No linked children"
+            description="This parent account does not have linked child profiles visible yet."
+          />
+        ) : activeChild ? (
+          <>
+            <div className="mt-6 flex flex-wrap items-center gap-4">
+              <div className="flex rounded-full bg-slate-100 p-1">
+                {children.map((child) => (
+                  <button
+                    key={child.id}
+                    type="button"
+                    onClick={() => setActiveChildId(child.id)}
+                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                      child.id === activeChild.id
+                        ? "bg-rose-400 text-white shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {child.name}
+                  </button>
+                ))}
               </div>
+              <span className="text-sm text-slate-500">
+                Viewing <span className="font-semibold text-rose-500">{activeChild.name}&apos;s</span> Dashboard
+              </span>
             </div>
-            <InsightsPanel items={TREND_INSIGHTS} />
-          </div>
-        </section>
 
-        {/* Skill columns */}
-        <section className="mt-8 grid grid-cols-1 gap-8 sm:grid-cols-3">
-          <SkillColumn title="Strong Skills" dotColor="bg-emerald-500" items={STRONG_SKILLS} />
-          <SkillColumn title="Needs Practice" dotColor="bg-amber-400" items={NEEDS_PRACTICE} />
-          <SkillColumn title="Focus Area" dotColor="bg-rose-500" items={FOCUS_AREA} />
-        </section>
+            <h1 className="mt-6 text-3xl font-extrabold text-slate-900">
+              {activeChild.name}&apos;s Reading Journey
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {activeChild.metrics.latestSessionAt
+                ? `Last session: ${formatDateTime(activeChild.metrics.latestSessionAt)}`
+                : "No sessions in the selected period"}
+            </p>
 
-        {/* Goals */}
-        <section className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <GoalCard title="Focus this week..." items={FOCUS_THIS_WEEK} />
-          <GoalCard title="Next goal..." items={NEXT_GOALS} />
-        </section>
+            <section className="mt-8">
+              <h2 className="mb-4 text-lg font-bold text-slate-900">Progress Overview:</h2>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+                <div className="grid grid-cols-2 gap-4">
+                  <StatCard
+                    label="Sessions"
+                    value={activeChild.metrics.sessionCount.toLocaleString()}
+                    note={period === "all" ? "All visible sessions" : `In the last ${period.replace("d", " days")}`}
+                  />
+                  <StatCard
+                    label="Words Read"
+                    value={activeChild.metrics.totalWords.toLocaleString()}
+                    note="From reading session totals"
+                  />
+                  <StatCard
+                    label="Correct Words"
+                    value={activeChild.metrics.correctWords.toLocaleString()}
+                    note="From reading session totals"
+                  />
+                  <StatCard
+                    label="Accuracy"
+                    value={formatAccuracy(activeChild.metrics.accuracyPct)}
+                    note="Correct words divided by total words"
+                  />
+                </div>
+                <SummaryPanel child={activeChild} />
+              </div>
+            </section>
 
-        {/* Recommended next steps */}
-        <section className="mt-8 rounded-3xl bg-[#F3E1DE] p-6">
-          <h2 className="mb-5 text-xl font-extrabold text-slate-900">Recommended Next Steps:</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {NEXT_STEPS.map((step) => (
-              <NextStepCard key={step.title} {...step} />
-            ))}
-          </div>
-        </section>
+            <section className="mt-6 rounded-3xl bg-[#FBEBD3] p-6">
+              <div className="rounded-2xl bg-[#F5C48A] p-5">
+                <h3 className="mb-4 text-sm font-bold text-slate-900">Words Read by Recent Session</h3>
+                {chartData.length > 0 ? (
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.4)" />
+                        <XAxis dataKey="session" tick={{ fontSize: 12, fill: "#5c4322" }} axisLine={false} tickLine={false} />
+                        <YAxis
+                          allowDecimals={false}
+                          tick={{ fontSize: 12, fill: "#5c4322" }}
+                          axisLine={false}
+                          tickLine={false}
+                          label={{ value: "Words", angle: -90, position: "insideLeft", style: { fontSize: 11, fill: "#5c4322" } }}
+                        />
+                        <Tooltip
+                          contentStyle={{ borderRadius: 12, border: "none", fontSize: 12 }}
+                          formatter={(value: unknown) => {
+                            const numValue = typeof value === "number" ? value : 0;
+                            return [`${numValue.toLocaleString()} words`, "Words"];
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="words"
+                          stroke="#ffffff"
+                          strokeWidth={3}
+                          dot={{ r: 5, fill: "#ffffff", stroke: "#E8695E", strokeWidth: 2 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="grid h-64 place-items-center rounded-2xl bg-white/50 p-6 text-center">
+                    <p className="text-sm font-bold leading-6 text-slate-600">
+                      No recent sessions to chart for this period.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <RecentSessionsList sessions={activeChild.recentSessions} />
+          </>
+        ) : null}
       </main>
 
-      {/* Footer */}
       <footer className="mt-12 border-t border-slate-200 bg-white py-8">
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 px-6 text-sm text-slate-500 sm:flex-row sm:items-center">
           <div>
@@ -328,4 +367,32 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
       </footer>
     </div>
   );
+}
+
+function formatAccuracy(value: number | null) {
+  return value === null ? "No data" : `${value}%`;
+}
+
+function formatSessionAccuracy(session: ParentDashboardRecentSession) {
+  if (session.totalWords === 0) {
+    return "No accuracy data";
+  }
+
+  return `${Number(((session.correctWords / session.totalWords) * 100).toFixed(1))}% accuracy`;
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric"
+  }).format(new Date(value));
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(value));
 }
