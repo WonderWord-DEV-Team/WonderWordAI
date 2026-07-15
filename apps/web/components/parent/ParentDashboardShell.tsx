@@ -141,7 +141,8 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
   const [period, setPeriod] = useState<ParentDashboardPeriod>("30d");
   const [activeChildId, setActiveChildId] = useState<string | null>(null);
   const dashboardQuery = useParentDashboard(period);
-  const children = dashboardQuery.data?.children ?? [];
+  const dashboardChildren = dashboardQuery.data?.children;
+  const children = useMemo(() => dashboardChildren ?? [], [dashboardChildren]);
 
   useEffect(() => {
     if (children.length === 0) {
