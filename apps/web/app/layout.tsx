@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { QueryProvider } from "@/components/providers/QueryProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,7 +19,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <div className="ww-shell">{children}</div>
+        <QueryProvider>
+          <div className="ww-shell">{children}</div>
+        </QueryProvider>
       </body>
     </html>
   );
