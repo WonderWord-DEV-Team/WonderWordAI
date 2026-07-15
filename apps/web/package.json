@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.111.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.2",
+    "@tanstack/react-query": "^5.101.2",
     "lucide-react": "^1.23.0",
     "next": "14.2.35",
     "react": "18.3.1",

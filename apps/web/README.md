@@ -31,6 +31,113 @@ Required environment variables:
 
 `NEXT_PUBLIC_SUPABASE_ANON_KEY` is still accepted by the local helper for older environments, but new setup should use `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 
+## TanStack Query Data Layer
+
+The App Router root layout stays a Server Component. `components/providers/QueryProvider.tsx`
+is the small client boundary that mounts `QueryClientProvider` around the shared app shell in
+`app/layout.tsx`.
+
+TanStack Query owns server state:
+
+- reading-session lists;
+- reading-session create and close mutations;
+- parent dashboard data.
+
+`ChildSessionContext` continues to own active reading-session UI state:
+
+- current active session ID;
+- OCR text and image keywords;
+- worksheet upload/readiness status;
+- active word position and local correction UI state.
+
+Do not move request-scoped OCR text, recording state, karaoke position, or other transient reading
+state into TanStack Query.
+
+### Browser API client
+
+Browser-side query functions use `lib/api/client.ts`. It calls authenticated Next.js API routes with
+the existing Supabase cookie session, preserves HTTP status and stable error codes in `ApiError`, and
+does not manually attach tokens.
+
+### Session hooks
+
+Session query keys live in `lib/sessions/keys.ts`, client functions in `lib/sessions/client.ts`, and
+React hooks in `hooks/useSessions.ts`.
+
+```tsx
+const sessions = useSessions({ status: "open", limit: 20 });
+const openSessions = useOpenSessions();
+const createSession = useCreateSession();
+const closeSession = useCloseSession();
+```
+
+`useCreateSession` and `useCloseSession` invalidate all session list queries after successful
+mutations. The worksheet capture flow still guards session creation with a single in-flight promise so
+double clicks do not create duplicate open sessions.
+
+## Parent Dashboard API
+
+`GET /api/parent/dashboard?period=7d|14d|30d|all` returns dashboard data for linked children visible
+to the authenticated parent.
+
+Authorization:
+
+- `401`: no authenticated Supabase session.
+- `403`: authenticated user is not a parent application user.
+- `200`: parent has no linked children, with an empty `children` array.
+
+The endpoint resolves the application user through `public.users.auth_id`, uses the ordinary
+RLS-enabled Supabase server client, and does not use the service-role key.
+
+Response:
+
+```json
+{
+  "data": {
+    "period": "30d",
+    "children": [
+      {
+        "id": "10000000-0000-0000-0000-000000000001",
+        "name": "Child One",
+        "recentSessions": [
+          {
+            "id": "40000000-0000-0000-0000-000000000001",
+            "startTime": "2026-07-12T19:00:00.000Z",
+            "endTime": null,
+            "status": "open",
+            "totalWords": 20,
+            "correctWords": 18
+          }
+        ],
+        "metrics": {
+          "sessionCount": 1,
+          "totalWords": 20,
+          "correctWords": 18,
+          "accuracyPct": 90,
+          "latestSessionAt": "2026-07-12T19:00:00.000Z"
+        }
+      }
+    ]
+  }
+}
+```
+
+Metrics are computed only from `public.reading_sessions` rows visible under RLS:
+
+- `sessionCount`: visible sessions in the selected period.
+- `totalWords`: sum of `reading_sessions.total_words`.
+- `correctWords`: sum of `reading_sessions.correct_words`.
+- `accuracyPct`: `null` when `totalWords` is `0`, otherwise `correctWords / totalWords * 100`.
+- `latestSessionAt`: latest visible `start_time`.
+- `recentSessions`: newest visible sessions first, bounded for dashboard display.
+
+Parent dashboard query keys live in `lib/parent/keys.ts`, the client function is
+`lib/parent/client.ts`, and the hook is `hooks/useParentDashboard.ts`:
+
+```tsx
+const dashboard = useParentDashboard("30d");
+```
+
 ### `POST /api/sessions`
 
 Creates a new open reading session for the authenticated child. The request body must be an empty JSON object or omitted.

@@ -9,6 +9,7 @@ import { PageContainer } from "@/components/shared/PageContainer";
 import { PlaceholderCard } from "@/components/shared/PlaceholderCard";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { WorksheetCapture } from "@/components/worksheet/WorksheetCapture";
+import { useCreateSession } from "@/hooks/useSessions";
 import type { AuthContext } from "@/lib/auth/types";
 
 type ChildReadingShellProps = {
@@ -30,6 +31,7 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
     clearOcrResult
   } = useChildSession();
   const sessionRequestRef = useRef<Promise<string> | null>(null);
+  const { mutateAsync: createSession } = useCreateSession();
   const isDemoSession = sessionId === "demo-session";
   const isReadingReady = Boolean(worksheetText);
 
@@ -42,35 +44,17 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
       return sessionRequestRef.current;
     }
 
-    sessionRequestRef.current = fetch("/api/sessions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: "{}"
-    })
-      .then(async (response) => {
-        const payload = await response.json().catch(() => null);
-
-        if (!response.ok) {
-          throw new Error(payload?.message ?? "We could not start a reading session.");
-        }
-
-        const nextSessionId = payload?.session?.id;
-
-        if (typeof nextSessionId !== "string") {
-          throw new Error("We could not start a reading session.");
-        }
-
-        setSessionId(nextSessionId);
-        return nextSessionId;
+    sessionRequestRef.current = createSession()
+      .then((session) => {
+        setSessionId(session.id);
+        return session.id;
       })
       .finally(() => {
         sessionRequestRef.current = null;
       });
 
     return sessionRequestRef.current;
-  }, [sessionId, setSessionId]);
+  }, [createSession, sessionId, setSessionId]);
 
   return (
     <main className="bg-[linear-gradient(180deg,rgb(255_249_241),rgb(255_240_226))]">
