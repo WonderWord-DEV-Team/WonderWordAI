@@ -90,7 +90,7 @@ function PhonicsTab() {
         </div>
         <button
           aria-label="Play pronunciation"
-          className="w-9 h-9 min-h-[36px] bg-[#E6F5F6] rounded-full flex items-center justify-center text-[#008C9A]"
+          className="w-12 h-12 min-h-[48px] bg-[#E6F5F6] rounded-full flex items-center justify-center text-[#008C9A]"
         >
           🔊
         </button>
@@ -118,7 +118,7 @@ function PhonicsTab() {
       <div className="bg-[#E6F5F6] rounded-xl px-4 py-3 flex items-center gap-3">
         <button
           aria-label="Play full pronunciation"
-          className="w-9 h-9 min-h-[36px] bg-[#008C9A] rounded-full flex items-center justify-center text-white"
+          className="w-12 h-12 min-h-[48px] bg-[#008C9A] rounded-full flex items-center justify-center text-white"
         >
           ▶
         </button>
@@ -186,7 +186,7 @@ function ListenTab() {
       <div className="flex items-center justify-center gap-4">
         <button
           aria-label="Restart"
-          className="w-9 h-9 min-h-[36px] flex items-center justify-center text-gray-500"
+          className="w-12 h-12 min-h-[48px] flex items-center justify-center text-gray-500"
         >
           ↺
         </button>
@@ -198,7 +198,7 @@ function ListenTab() {
         </button>
         <button
           aria-label="Volume"
-          className="w-9 h-9 min-h-[36px] flex items-center justify-center text-gray-500"
+          className="w-12 h-12 min-h-[48px] flex items-center justify-center text-gray-500"
         >
           🔊
         </button>
