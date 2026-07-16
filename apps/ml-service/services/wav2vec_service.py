@@ -1,5 +1,6 @@
 import os
 import threading
+from pathlib import Path
 
 from config import CONFIDENCE_THRESHOLD, DEVICE, HF_TOKEN
 from services.confidence_filter import phoneme_similarity
@@ -21,6 +22,29 @@ class Wav2VecModelLoadError(RuntimeError):
     pass
 
 
+def _configure_espeak_library() -> None:
+    """Point phonemizer at eSpeak NG on Windows when it is installed."""
+    if os.name != "nt":
+        return
+
+    configured_path = os.getenv("ESPEAK_LIBRARY")
+    candidates = [
+        Path(configured_path) if configured_path else None,
+        Path(r"C:\Program Files\eSpeak NG\libespeak-ng.dll"),
+        Path(r"C:\Program Files (x86)\eSpeak NG\libespeak-ng.dll"),
+    ]
+    library_path = next(
+        (path for path in candidates if path is not None and path.is_file()),
+        None,
+    )
+    if library_path is None:
+        return
+
+    from phonemizer.backend.espeak.wrapper import EspeakWrapper
+
+    EspeakWrapper.set_library(str(library_path))
+
+
 def load_wav2vec_model():
     """Load Wav2Vec2 once and retain the processor and model in memory."""
     global processor, model
@@ -40,6 +64,8 @@ def load_wav2vec_model():
                 Wav2Vec2Processor,
             )
             from transformers.utils.hub import cached_file
+
+            _configure_espeak_library()
 
             # AutoProcessor in Transformers 4.57 can deserialize this model's
             # `do_phonemize` setting as the tokenizer argument itself. Build
