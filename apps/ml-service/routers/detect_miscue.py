@@ -3,7 +3,7 @@ import tempfile
 from contextlib import suppress
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -16,7 +16,14 @@ router = APIRouter()
 async def detect_audio_miscue(
     audio: Annotated[UploadFile, File(...)],
     reference_text: Annotated[str, Form(...)],
+    x_internal_key: Annotated[
+        str,
+        Header(alias="X-Internal-Key"),
+    ],
 ) -> JSONResponse:
+    # Authentication is enforced centrally by InternalKeyMiddleware. Declaring
+    # the header here makes it visible in the generated OpenAPI/Swagger UI.
+    _ = x_internal_key
     reference_text = reference_text.strip()
     if not reference_text:
         raise HTTPException(status_code=400, detail="reference_text is required")
