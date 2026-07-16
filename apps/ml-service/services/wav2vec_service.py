@@ -33,11 +33,30 @@ def load_wav2vec_model():
             return processor, model
 
         try:
-            from transformers import AutoModelForCTC, AutoProcessor
+            from transformers import (
+                AutoModelForCTC,
+                Wav2Vec2FeatureExtractor,
+                Wav2Vec2PhonemeCTCTokenizer,
+                Wav2Vec2Processor,
+            )
+            from transformers.utils.hub import cached_file
 
-            processor = AutoProcessor.from_pretrained(
+            # AutoProcessor in Transformers 4.57 can deserialize this model's
+            # `do_phonemize` setting as the tokenizer argument itself. Build
+            # the two processor components explicitly to avoid that bug.
+            feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(
                 WAV2VEC_MODEL_NAME,
                 token=HF_TOKEN,
+            )
+            vocab_file = cached_file(
+                WAV2VEC_MODEL_NAME,
+                "vocab.json",
+                token=HF_TOKEN,
+            )
+            tokenizer = Wav2Vec2PhonemeCTCTokenizer(vocab_file=vocab_file)
+            processor = Wav2Vec2Processor(
+                feature_extractor=feature_extractor,
+                tokenizer=tokenizer,
             )
             model = AutoModelForCTC.from_pretrained(
                 WAV2VEC_MODEL_NAME,
