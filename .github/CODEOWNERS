@@ -1,0 +1,13 @@
+# Default repository ownership.
+* @Matheus-Emanue123
+
+# Application surfaces.
+/apps/web/ @anderpudding @Matheus-Emanue123
+/apps/ml-service/ @anvitaindrakanty @Matheus-Emanue123
+
+# Database, Supabase, and local schema references.
+/supabase/ @anderpudding @Matheus-Emanue123
+/infra/db/ @anderpudding @Matheus-Emanue123
+
+# GitHub workflows and repository governance.
+/.github/ @Matheus-Emanue123
