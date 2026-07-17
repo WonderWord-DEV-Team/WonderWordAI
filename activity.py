@@ -6,7 +6,7 @@ import os
 load_dotenv()
 
 anthropic = Anthropic(
-    api_key=os.getenv("Anthropic_API_KEY")
+    api_key=os.getenv("ANTHROPIC_API_KEY")
 )
 
 def activity_call(phonics_category: str):
@@ -31,8 +31,8 @@ def activity_call(phonics_category: str):
 
 def call_claude(activity):
     response = anthropic.messages.create(
-        model="claude-3-5-haiku-latest",
-        max_tokens=150,
+        model="claude-haiku-4-5-20251001", 
+        max_tokens=800 ,
         messages=[
             {
                 "role": "user",
@@ -48,8 +48,3 @@ def call_claude(activity):
     )
 
     return response.content[0].text
-
-
-
-
-    
