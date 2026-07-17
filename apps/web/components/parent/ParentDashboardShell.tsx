@@ -96,6 +96,7 @@ function DashboardMessage({
   );
 }
 
+// ticket: build basic reading session history list for parent dashboard
 function RecentSessionsList({ sessions }: { sessions: ParentDashboardRecentSession[] }) {
   if (sessions.length === 0) {
     return (
@@ -113,13 +114,14 @@ function RecentSessionsList({ sessions }: { sessions: ParentDashboardRecentSessi
       </div>
       <ul className="divide-y divide-slate-100">
         {sessions.map((session) => (
-          <li key={session.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+          <li key={session.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_auto_auto_auto] sm:items-center">
             <div>
               <p className="text-sm font-bold text-slate-900">{formatDateTime(session.startTime)}</p>
               <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 {session.status}
               </p>
             </div>
+            <p className="text-sm font-semibold text-slate-600">{formatSessionDuration(session)}</p>
             <p className="text-sm font-semibold text-slate-600">
               {session.totalWords.toLocaleString()} words
             </p>
@@ -380,6 +382,23 @@ function formatSessionAccuracy(session: ParentDashboardRecentSession) {
   }
 
   return `${Number(((session.correctWords / session.totalWords) * 100).toFixed(1))}% accuracy`;
+}
+
+// ticket: build basic reading session history list for parent dashboard
+function formatSessionDuration(session: ParentDashboardRecentSession) {
+  if (!session.endTime) {
+    return "In progress";
+  }
+
+  const durationMs = Date.parse(session.endTime) - Date.parse(session.startTime);
+
+  if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    return "—";
+  }
+
+  const minutes = Math.max(1, Math.round(durationMs / 60_000));
+
+  return `${minutes} min`;
 }
 
 function formatDate(value: string) {
