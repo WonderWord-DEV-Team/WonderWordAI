@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { useChildSession } from "@/components/child/ChildSessionContext";
+import { StoryTab } from "@/components/child/StoryTab";
 import { BrandHeader } from "@/components/shared/BrandHeader";
 import { MetricCard } from "@/components/shared/MetricCard";
 import { PageContainer } from "@/components/shared/PageContainer";
@@ -15,6 +16,14 @@ import type { AuthContext } from "@/lib/auth/types";
 type ChildReadingShellProps = {
   auth: AuthContext;
 };
+
+// ticket: implement image rendering inside story tab (skeleton + placeholder)
+type ReadingPanelTab = "text" | "story";
+
+const READING_PANEL_TABS: { label: string; value: ReadingPanelTab }[] = [
+  { label: "Reading Text", value: "text" },
+  { label: "Story", value: "story" }
+];
 
 const sessionMetrics = ["Time", "Words read", "Accuracy"];
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -34,6 +43,8 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
   const { mutateAsync: createSession } = useCreateSession();
   const isDemoSession = sessionId === "demo-session";
   const isReadingReady = Boolean(worksheetText);
+  // ticket: implement image rendering inside story tab (skeleton + placeholder)
+  const [activeTab, setActiveTab] = useState<ReadingPanelTab>("text");
 
   const ensureOpenSession = useCallback(async () => {
     if (uuidPattern.test(sessionId)) {
@@ -96,8 +107,30 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
                 />
               </div>
 
-              <PlaceholderCard title={isReadingReady ? "Reading text" : "Reading text preview"} className="min-h-[22rem] reading-ruler">
-                {worksheetText ? (
+              <PlaceholderCard
+                title={
+                  <span className="inline-flex gap-2 rounded-full bg-slate-100 p-1">
+                    {READING_PANEL_TABS.map((tab) => (
+                      <button
+                        key={tab.value}
+                        type="button"
+                        onClick={() => setActiveTab(tab.value)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] transition-colors ${
+                          activeTab === tab.value
+                            ? "bg-coral text-white shadow-sm"
+                            : "text-muted hover:text-navy"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </span>
+                }
+                className="min-h-[22rem] reading-ruler"
+              >
+                {activeTab === "story" ? (
+                  <StoryTab />
+                ) : worksheetText ? (
                   <div className="rounded-[var(--radius-card)] bg-white/88 p-5">
                     <p className="whitespace-pre-wrap text-2xl font-extrabold leading-10 text-navy">
                       {worksheetText}
