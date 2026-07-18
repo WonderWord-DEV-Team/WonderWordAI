@@ -15,6 +15,8 @@ We use Conventional Commits. Ensure your commit messages start with:
 
 ## 3. Pull Requests & Code Review
 - Every single change must go through a Pull Request.
+- Complete `.github/PULL_REQUEST_TEMPLATE.md` with only the sections and checks that apply.
+- Review requests are guided by `.github/CODEOWNERS`; keep ownership updates in sync with verified GitHub usernames or team slugs.
 - Link the PR to its corresponding Issue by adding `Closes #N` to the description.
 - All PRs require at least 1 approving review and passing CI checks before merging.
 - Respect the team's multi-timezone nature; aim to complete reviews within 24 hours.
