@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 type PlaceholderCardProps = {
-  title: string;
+  title: ReactNode;
   children: ReactNode;
   className?: string;
 };
