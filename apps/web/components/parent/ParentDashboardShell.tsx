@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { useChildReport } from "@/hooks/useChildReport";
 import { useParentDashboard } from "@/hooks/useParentDashboard";
 import type { AuthContext } from "@/lib/auth/types";
 import {
@@ -9,6 +10,7 @@ import {
   type ParentDashboardPeriod,
   type ParentDashboardRecentSession
 } from "@/lib/parent/dashboard";
+import type { ChildReportDeficit } from "@/lib/reports/schema";
 import {
   LineChart,
   Line,
@@ -18,7 +20,7 @@ import {
   ResponsiveContainer,
   Tooltip
 } from "recharts";
-import { AlertTriangle, BookOpen, CalendarDays, Lightbulb, Rocket } from "lucide-react";
+import { AlertTriangle, BookOpen, CalendarDays, Lightbulb, Rocket, Target } from "lucide-react";
 
 const PERIOD_OPTIONS: { label: string; value: ParentDashboardPeriod }[] = [
   { label: "7 days", value: "7d" },
@@ -70,6 +72,49 @@ function SummaryPanel({ child }: { child: ParentDashboardChild }) {
           </span>
         </li>
       </ul>
+    </div>
+  );
+}
+
+// ticket: wire parent dashboard to /api/reports/[childId] (wpm, accuracy, deficits)
+function DeficitsPanel({
+  isLoading,
+  isError,
+  deficits
+}: {
+  isLoading: boolean;
+  isError: boolean;
+  deficits: ChildReportDeficit[];
+}) {
+  return (
+    <div className="rounded-2xl border-2 border-dashed border-teal/40 bg-white p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <Target className="h-4 w-4 text-teal" />
+        <h3 className="text-sm font-bold text-slate-900">Focus Areas</h3>
+      </div>
+      {isLoading ? (
+        <p className="text-[13px] leading-snug text-slate-500">Loading phonics deficits…</p>
+      ) : isError ? (
+        <p className="text-[13px] leading-snug text-slate-500">Unable to load focus areas right now.</p>
+      ) : deficits.length === 0 ? (
+        <p className="text-[13px] leading-snug text-slate-500">
+          No recurring phonics deficits detected recently.
+        </p>
+      ) : (
+        <ul className="space-y-2.5">
+          {deficits.map((deficit) => (
+            <li key={deficit.phonicsCategory} className="flex items-center justify-between gap-3 text-[13px] leading-snug text-slate-600">
+              <span className="flex min-w-0 gap-2">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-teal" />
+                <span className="truncate font-semibold text-slate-800">{deficit.phonicsCategory}</span>
+              </span>
+              <span className="shrink-0 text-xs font-bold text-slate-500">
+                {deficit.miscueCount} miscue{deficit.miscueCount === 1 ? "" : "s"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -145,6 +190,8 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
   const dashboardQuery = useParentDashboard(period);
   const dashboardChildren = dashboardQuery.data?.children;
   const children = useMemo(() => dashboardChildren ?? [], [dashboardChildren]);
+  // ticket: wire parent dashboard to /api/reports/[childId] (wpm, accuracy, deficits)
+  const reportQuery = useChildReport(activeChildId);
 
   useEffect(() => {
     if (children.length === 0) {
@@ -300,8 +347,20 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
                     value={formatAccuracy(activeChild.metrics.accuracyPct)}
                     note="Correct words divided by total words"
                   />
+                  <StatCard
+                    label="Reading Speed"
+                    value={formatWpm(reportQuery.data?.wcpm ?? null, reportQuery.isLoading)}
+                    note={formatWpmDelta(reportQuery.data?.wcpmDelta ?? null)}
+                  />
                 </div>
-                <SummaryPanel child={activeChild} />
+                <div className="grid gap-6">
+                  <SummaryPanel child={activeChild} />
+                  <DeficitsPanel
+                    isLoading={reportQuery.isLoading}
+                    isError={reportQuery.isError}
+                    deficits={reportQuery.data?.deficits ?? []}
+                  />
+                </div>
               </div>
             </section>
 
@@ -374,6 +433,27 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
 
 function formatAccuracy(value: number | null) {
   return value === null ? "No data" : `${value}%`;
+}
+
+// ticket: wire parent dashboard to /api/reports/[childId] (wpm, accuracy, deficits)
+function formatWpm(value: number | null, isLoading: boolean) {
+  if (isLoading) {
+    return "…";
+  }
+
+  return value === null ? "No data" : `${value} wpm`;
+}
+
+function formatWpmDelta(value: number | null) {
+  if (value === null) {
+    return "No prior report to compare";
+  }
+
+  if (value === 0) {
+    return "No change since last report";
+  }
+
+  return value > 0 ? `Up ${value} wpm since last report` : `Down ${Math.abs(value)} wpm since last report`;
 }
 
 function formatSessionAccuracy(session: ParentDashboardRecentSession) {
