@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Child ID missing' }, { status: 400 });
     }
 
-
+    // 1. Fetch the actual reading summary
     const { data: summary, error: summaryError } = await supabase
       .from('child_reading_summary')
       .select('*')
@@ -29,6 +29,7 @@ export async function POST(request: Request) {
 
     if (summaryError) throw new Error(`Summary Error: ${summaryError.message}`);
 
+    // 2. Fetch the actual phonics deficits
     const { data: deficits, error: deficitsError } = await supabase
       .from('child_phonics_deficits')
       .select('phonics_category, miscue_count')
@@ -37,42 +38,21 @@ export async function POST(request: Request) {
 
     if (deficitsError) throw new Error(`Deficits Error: ${deficitsError.message}`);
     
-
-    const summary = {
-      child_id: childId,
-      child_name: "Leo",
-      grade: 2,
-      total_sessions: 4,
-      total_words_read: 120,
-      accuracy_pct: 85.5,
-      total_miscues: 17,
-      last_session_at: new Date().toISOString()
-    };
-
-    const deficits = [
-      { phonics_category: "sh-digraph", miscue_count: 5 },
-      { phonics_category: "long-a", miscue_count: 3 }
-    ];
-
+    // Combine for Claude's prompt
     const studentDataString = JSON.stringify({ summary, top_deficits: deficits });
 
-    
+    // 3. Fetch actual phonics knowledge rules
     const { data: phonicsData, error: phonicsError } = await supabase
       .from('phonics_knowledge')
       .select('category, phonics_rule'); 
 
     if (phonicsError) throw new Error(`Phonics Error: ${phonicsError.message}`);
-    
 
-    const phonicsData = [
-      { category: "sh-digraph", phonics_rule: "The 'sh' sound is an unvoiced consonant digraph." },
-      { category: "long-a", phonics_rule: "The long 'a' says its name, often spelled with a silent 'e' at the end (e.g., cake)." }
-    ];
-
-    const phonicsRulesString = phonicsData
+    const phonicsRulesString = (phonicsData || [])
       .map(item => `- [${item.category}]: ${item.phonics_rule}`)
       .join('\n');
 
+    // 4. Send to Anthropic API
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1000,
@@ -102,11 +82,11 @@ Your task is to write an encouraging, easy-to-understand biweekly reading report
     }
 
     const reportText = firstBlock.text;
-
     
     const cycleStart = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(); 
     const cycleEnd = new Date().toISOString(); 
 
+    // 5. Save the generated report back to the database
     const { error: insertError } = await supabase
       .from('generated_reports')
       .insert({
@@ -119,12 +99,10 @@ Your task is to write an encouraging, easy-to-understand biweekly reading report
       });
 
     if (insertError) throw new Error(`Insert Error: ${insertError.message}`);
-    
 
     return NextResponse.json({ 
       success: true, 
-      report: reportText,
-      mock_alert: "Dados salvos e lidos foram ignorados no DB. Retorno apenas da API do Claude." 
+      report: reportText
     });
 
   } catch (error: any) {
