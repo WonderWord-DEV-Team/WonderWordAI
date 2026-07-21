@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Child ID missing' }, { status: 400 });
     }
 
-    /*
+
     const { data: summary, error: summaryError } = await supabase
       .from('child_reading_summary')
       .select('*')
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       .limit(3);
 
     if (deficitsError) throw new Error(`Deficits Error: ${deficitsError.message}`);
-    */
+    
 
     const summary = {
       child_id: childId,
@@ -56,13 +56,13 @@ export async function POST(request: Request) {
 
     const studentDataString = JSON.stringify({ summary, top_deficits: deficits });
 
-    /*
+    
     const { data: phonicsData, error: phonicsError } = await supabase
       .from('phonics_knowledge')
       .select('category, phonics_rule'); 
 
     if (phonicsError) throw new Error(`Phonics Error: ${phonicsError.message}`);
-    */
+    
 
     const phonicsData = [
       { category: "sh-digraph", phonics_rule: "The 'sh' sound is an unvoiced consonant digraph." },
@@ -103,7 +103,7 @@ Your task is to write an encouraging, easy-to-understand biweekly reading report
 
     const reportText = firstBlock.text;
 
-    /*
+    
     const cycleStart = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(); 
     const cycleEnd = new Date().toISOString(); 
 
@@ -119,7 +119,7 @@ Your task is to write an encouraging, easy-to-understand biweekly reading report
       });
 
     if (insertError) throw new Error(`Insert Error: ${insertError.message}`);
-    */
+    
 
     return NextResponse.json({ 
       success: true, 
