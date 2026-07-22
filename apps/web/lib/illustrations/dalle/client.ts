@@ -17,8 +17,8 @@ function getOpenAIClient(): OpenAI {
 }
 
 /**
- * Gera uma ilustração via OpenAI (gpt-image-2 / DALL-E) e retorna como URL pública ou URI de dados base64.
- * Inclui cache no Supabase Storage e timeout de 3 segundos no request da API.
+ * Generates an illustration via OpenAI (gpt-image-2 / DALL-E) and returns it as a public URL or base64 data URI.
+ * Includes caching in Supabase Storage and a 3-second timeout on the API request.
  */
 export async function generateDalleImage(word: string): Promise<string | null> {
   const wordSlug = getWordSlug(word);
