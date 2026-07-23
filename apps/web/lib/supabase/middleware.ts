@@ -69,13 +69,13 @@ export async function updateSession(request: NextRequest) {
     }
   });
 
-  const { data, error } = await supabase.auth.getClaims();
+  const { data, error } = await supabase.auth.getUser();
 
-  if (error || !data?.claims) {
+  if (error || !data?.user) {
     return isProtectedRoute ? redirectToLogin(request, supabaseResponse) : supabaseResponse;
   }
 
-  const role = parseUserRole(data.claims.user_role);
+  const role = parseUserRole(data.user.app_metadata?.user_role);
 
   if (!role) {
     await supabase.auth.signOut();
