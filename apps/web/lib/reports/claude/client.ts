@@ -21,19 +21,10 @@ Rules for Report Generation:
    - Start with a positive narrative celebrating what they did well (e.g., number of sessions completed, general accuracy).
    - Gently address the specific areas they are struggling with based on the provided miscues and phonics categories. Explain the spelling patterns or phonetic rules in simple terms for the parent.
    - Summarize the top deficits (phonics categories).
-   - Provide 1 to 3 creative, offline "Playful Practice" activities that parents can play at home to help with those specific phonics categories.
 3. **Format**: Return ONLY a valid JSON object matching the schema below:
 {
   "narrative_text": "...",
-  "top_deficits": ["category-slug-1", "category-slug-2"],
-  "suggested_activities": [
-    {
-      "title": "Activity Name",
-      "description": "How to play it offline at home with the child",
-      "pedagogy": "Why this helps the child with their specific phonics category",
-      "phonics_category": "category-slug"
-    }
-  ]
+  "top_deficits": ["category-slug-1", "category-slug-2"]
 }`;
 
 export class ReportMalformedResponseError extends Error {

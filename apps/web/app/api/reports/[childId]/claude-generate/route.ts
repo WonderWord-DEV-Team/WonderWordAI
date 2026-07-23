@@ -37,6 +37,7 @@ type ReadingEventRow = {
     expected_phonemes: string;
     actual_phonemes: string;
     phonics_category: string;
+    similarity_score: number | null;
 };
 
 export async function POST(
@@ -129,7 +130,7 @@ export async function POST(
     // FETCH MISCUES (is_correct = false) IN DATE RANGE
     const { data: miscues, error: miscuesError } = await supabase
         .from("reading_events")
-        .select("word, expected_phonemes, actual_phonemes, phonics_category")
+        .select("word, expected_phonemes, actual_phonemes, phonics_category, similarity_score")
         .eq("child_id", childId)
         .eq("is_correct", false)
         .gte("timestamp", cycleStart)
@@ -204,19 +205,114 @@ export async function POST(
             }))
         });
 
-        // PERSIST REPORT TO DATABASE
+        // FETCH ACTIVITIES & ENRICH DEFICITS
+        const mlServiceUrl = process.env.ML_SERVICE_URL;
+        const mlServiceKey = process.env.ML_SERVICE_KEY;
+
+        const suggestedActivities: Array<{
+            title: string;
+            description: string;
+            pedagogy: string;
+            phonics_category: string;
+            recommendation?: string;
+        }> = [];
+
+        const enrichedDeficits: Array<{
+            phonicsCategory: string;
+            miscueCount: number;
+            avgSimilarity: number | null;
+        }> = [];
+
+        if (haikuResult.top_deficits && haikuResult.top_deficits.length > 0) {
+            for (const category of haikuResult.top_deficits) {
+                // Calculate local stats from miscues
+                const categoryMiscues = miscues.filter((m) => m.phonics_category === category);
+                const miscueCount = categoryMiscues.length;
+                const validScores = categoryMiscues
+                    .map((m) => m.similarity_score)
+                    .filter((score): score is number => typeof score === "number");
+                const avgSimilarity =
+                    validScores.length > 0
+                        ? Math.round((validScores.reduce((sum, s) => sum + s, 0) / validScores.length) * 1000) / 1000
+                        : null;
+
+                enrichedDeficits.push({
+                    phonicsCategory: category,
+                    miscueCount,
+                    avgSimilarity
+                });
+
+                // Fetch recommendation from Python ml-service
+                if (mlServiceUrl && mlServiceKey) {
+                    try {
+                        const response = await fetch(`${mlServiceUrl.replace(/\/$/, "")}/activity-recommendation`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "X-Internal-Key": mlServiceKey
+                            },
+                            body: JSON.stringify({ phonics_category: category })
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            suggestedActivities.push({
+                                title: data.title,
+                                description: data.description,
+                                pedagogy: data.pedagogy,
+                                phonics_category: category,
+                                recommendation: data.recommendation
+                            });
+                        } else {
+                            console.warn(`ML service returned error for category: ${category}. Status: ${response.status}`);
+                            // Fallback
+                            suggestedActivities.push({
+                                phonics_category: category,
+                                title: "Playful Reading Practice",
+                                description: `Practice words containing the phonetic pattern: "${category}".`,
+                                pedagogy: "Reinforces phonetic mapping and pattern recognition.",
+                                recommendation: "Regular reading practice is recommended."
+                            });
+                        }
+                    } catch (err) {
+                        console.error(`Failed to call ML service for category: ${category}`, err);
+                        // Fallback
+                        suggestedActivities.push({
+                            phonics_category: category,
+                            title: "Playful Reading Practice",
+                            description: `Practice words containing the phonetic pattern: "${category}".`,
+                            pedagogy: "Reinforces phonetic mapping and pattern recognition.",
+                            recommendation: "Regular reading practice is recommended."
+                        });
+                    }
+                } else {
+                    // Fallback if ml-service not configured
+                    suggestedActivities.push({
+                        phonics_category: category,
+                        title: "Playful Reading Practice",
+                        description: `Practice words containing the phonetic pattern: "${category}".`,
+                        pedagogy: "Reinforces phonetic mapping and pattern recognition.",
+                        recommendation: "Regular reading practice is recommended."
+                    });
+                }
+            }
+        }
+
+        // PERSIST REPORT TO DATABASE (UPSERT ON CONFLICT)
         const { data: savedReport, error: insertError } = await supabase
             .from("generated_reports")
-            .insert({
+            .upsert({
                 child_id: childId,
                 narrative_text: haikuResult.narrative_text,
-                activity_recommendation: haikuResult.suggested_activities,
+                activity_recommendation: suggestedActivities,
                 cycle_start: cycleStart,
                 cycle_end: cycleEnd,
                 wcpm: currentWcpm,
                 wcpm_delta: wcpmDelta,
                 accuracy_pct: accuracyPct,
-                top_deficits: haikuResult.top_deficits
+                top_deficits: enrichedDeficits
+            }, {
+                onConflict: "child_id,cycle_start"
             })
             .select()
             .single();

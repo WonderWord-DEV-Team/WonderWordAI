@@ -37,15 +37,7 @@ export type ReportGenerationBody = z.infer<typeof reportGenerationBodySchema>;
 // AI MODEL RESPONSE VALIDATION (AI OUTPUT)
 export const reportModelResponseSchema = z.object({
     narrative_text: z.string().min(1, "narrative_text must not be empty"),
-    top_deficits: z.array(z.string()).describe("List of phonics categories the child struggled with"),
-    suggested_activities: z.array(
-        z.object({
-            title: z.string().min(1),
-            description: z.string().min(1),
-            pedagogy: z.string().min(1),
-            phonics_category: z.string().min(1)
-        })
-    ).min(1, "At least one activity recommendation is required")
+    top_deficits: z.array(z.string()).describe("List of phonics categories the child struggled with")
 });
 
 export type ReportModelResponse = z.infer<typeof reportModelResponseSchema>;
