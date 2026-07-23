@@ -3,31 +3,47 @@ name: ML Service CI
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'apps/ml-service/**'
   pull_request:
     branches: [ main ]
-    paths:
-      - 'apps/ml-service/**'
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      ml: ${{ steps.filter.outputs.ml }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            ml:
+              - 'apps/ml-service/**'
+
   test:
     name: Lint and Pytest
+    needs: changes
+    if: needs.changes.outputs.ml == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11.11'
-          
       - name: Install dependencies
         run: |
           cd apps/ml-service
           echo "Installing python dependencies from requirements.txt or poetry..."
-          
       - name: Run Linter and Tests
         run: |
           cd apps/ml-service
           echo "Running ruff/black and pytest..."
+
+  test-skip:
+    name: Lint and Pytest
+    needs: changes
+    if: needs.changes.outputs.ml != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "No ML service changes — skipping."
