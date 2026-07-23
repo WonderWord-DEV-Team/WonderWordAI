@@ -66,20 +66,23 @@ export async function updateSession(request: NextRequest) {
     }
   });
 
-  const { data, error } = await supabase.auth.getClaims();
+  const { data, error } = await supabase.auth.getUser();
 
-  if (error || !data?.claims) {
+  if (error || !data?.user) {
     const decision = classifyMiddlewareRequest(pathname, { status: "unauthenticated" });
     return decision.kind === "redirect"
       ? redirectToLogin(request, supabaseResponse, decision.error)
       : supabaseResponse;
   }
 
-  const role = parseUserRole(data.claims.user_role);
+  const role = parseUserRole(data.user.app_metadata?.user_role);
 
   if (!role) {
     await supabase.auth.signOut();
-    return redirectToLogin(request, supabaseResponse, "provisioning");
+    const decision = classifyMiddlewareRequest(pathname, { status: "invalid-role" });
+    return decision.kind === "redirect"
+      ? redirectToLogin(request, supabaseResponse, decision.error)
+      : supabaseResponse;
   }
 
   const decision = classifyMiddlewareRequest(pathname, { status: "authenticated", role });

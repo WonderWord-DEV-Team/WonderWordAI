@@ -59,19 +59,20 @@ export async function GET(request: NextRequest) {
     return errorResponse("forbidden", "Only parent accounts can access the dashboard.", 403);
   }
 
+  // console.log("DEBUG - ID do usuário logado:", appUser.id);
   const { data: links, error: linksError } = await supabase
     .from("parent_child")
     .select("child_id")
     .eq("parent_id", appUser.id)
-    .returns<ParentChildRow[]>();
+    .overrideTypes<ParentChildRow[], { merge: false }>();
+  // console.log("DEBUG - Links encontrados:", links, linksError);
 
   if (linksError) {
     console.error("Failed to fetch linked children for parent dashboard.", linksError);
-
     return errorResponse("internal_error", "Unable to load the parent dashboard.", 500);
   }
 
-  const linkedChildIds = links.map((link) => link.child_id);
+  const linkedChildIds = (links ?? []).map((link) => link.child_id);
 
   if (linkedChildIds.length === 0) {
     return NextResponse.json({
@@ -82,20 +83,20 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  // 2. Busca os perfis das crianças vinculadas
   const { data: childProfiles, error: childProfilesError } = await supabase
     .from("child_profiles")
     .select(CHILD_PROFILE_SELECT)
     .in("child_id", linkedChildIds)
     .order("name", { ascending: true })
-    .returns<ChildProfileRow[]>();
+    .overrideTypes<ChildProfileRow[], { merge: false }>();
 
   if (childProfilesError) {
     console.error("Failed to fetch child profiles for parent dashboard.", childProfilesError);
-
     return errorResponse("internal_error", "Unable to load the parent dashboard.", 500);
   }
 
-  const children: DashboardChildProfile[] = childProfiles.map((child) => ({
+  const children: DashboardChildProfile[] = (childProfiles ?? []).map((child) => ({
     id: child.child_id,
     name: child.name
   }));
@@ -117,10 +118,11 @@ export async function GET(request: NextRequest) {
 
   if (sessions.error) {
     console.error("Failed to fetch reading sessions for parent dashboard.", sessions.error);
-
     return errorResponse("internal_error", "Unable to load the parent dashboard.", 500);
   }
-
+  // console.log("DADOS ENVIADOS PARA O DASHBOARD:", JSON.stringify({ children, sessions: sessions.data }, null, 2));
+  console.log("child id:", children[0]?.id);
+  console.log("session id:", sessions.data[0]?.id);
   return NextResponse.json(
     buildParentDashboard({
       period: parsedQuery.data.period,
@@ -154,7 +156,7 @@ async function fetchDashboardSessions({
       query = query.gte("start_time", periodStart.toISOString());
     }
 
-    const { data, error } = await query.returns<DashboardSessionRow[]>();
+    const { data, error } = await query.overrideTypes<DashboardSessionRow[], { merge: false }>();
 
     if (error) {
       return { data: [], error };
