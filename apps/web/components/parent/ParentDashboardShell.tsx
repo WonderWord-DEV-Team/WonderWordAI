@@ -20,7 +20,7 @@ import {
   ResponsiveContainer,
   Tooltip
 } from "recharts";
-import { AlertTriangle, BookOpen, CalendarDays, Lightbulb, Rocket, Target } from "lucide-react";
+import { AlertTriangle, BookOpen, CalendarDays, Gauge, Lightbulb, Rocket } from "lucide-react";
 
 const PERIOD_OPTIONS: { label: string; value: ParentDashboardPeriod }[] = [
   { label: "7 days", value: "7d" },
@@ -76,8 +76,76 @@ function SummaryPanel({ child }: { child: ParentDashboardChild }) {
   );
 }
 
-// ticket: wire parent dashboard to /api/reports/[childId] (wpm, accuracy, deficits)
-function DeficitsPanel({
+// ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown
+// turns a raw category like "sh-digraph" into a display label like "Sh Digraph"
+function formatPhonicsCategory(category: string) {
+  return category
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+// ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown
+// there's no dedicated "mastery" signal in the data model yet, so these
+// foundational categories are treated as strong by default unless the child
+// currently has a matching deficit for them
+const FOUNDATIONAL_SKILLS = ["Sight words", "Short vowels", "CVC words", "Letter blends"];
+
+function splitDeficitsBySeverity(deficits: ChildReportDeficit[]) {
+  const sorted = [...deficits].sort((a, b) => b.miscueCount - a.miscueCount);
+  const focusCount = sorted.length === 0 ? 0 : Math.max(1, Math.ceil(sorted.length / 2));
+
+  return {
+    focusArea: sorted.slice(0, focusCount),
+    needsPractice: sorted.slice(focusCount)
+  };
+}
+
+function deriveStrongSkills(deficits: ChildReportDeficit[]) {
+  const deficitCategories = deficits.map((deficit) => deficit.phonicsCategory.toLowerCase());
+
+  return FOUNDATIONAL_SKILLS.filter(
+    (skill) => !deficitCategories.some((category) => category.includes(skill.toLowerCase()))
+  );
+}
+
+// ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown
+function SkillColumn({
+  dotClassName,
+  title,
+  items,
+  emptyLabel
+}: {
+  dotClassName: string;
+  title: string;
+  items: string[];
+  emptyLabel: string;
+}) {
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-2">
+        <span className={`h-2.5 w-2.5 rounded-full ${dotClassName}`} />
+        <h3 className="text-sm font-bold text-slate-900">{title}</h3>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-[13px] leading-snug text-slate-400">{emptyLabel}</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {items.map((item) => (
+            <li key={item} className="text-[13px] leading-snug text-slate-600">
+              • {item}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown
+// replaces the old flat "Focus Areas" list with a Strong Skills / Needs
+// Practice / Focus Area breakdown, split by miscue severity
+function PhonicsBreakdown({
   isLoading,
   isError,
   deficits
@@ -86,36 +154,38 @@ function DeficitsPanel({
   isError: boolean;
   deficits: ChildReportDeficit[];
 }) {
+  const { focusArea, needsPractice } = useMemo(() => splitDeficitsBySeverity(deficits), [deficits]);
+  const strongSkills = useMemo(() => deriveStrongSkills(deficits), [deficits]);
+
   return (
-    <div className="rounded-2xl border-2 border-dashed border-teal/40 bg-white p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <Target className="h-4 w-4 text-teal" />
-        <h3 className="text-sm font-bold text-slate-900">Focus Areas</h3>
-      </div>
+    <section className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
       {isLoading ? (
-        <p className="text-[13px] leading-snug text-slate-500">Loading phonics deficits…</p>
+        <p className="text-sm text-slate-500">Loading phonics breakdown…</p>
       ) : isError ? (
-        <p className="text-[13px] leading-snug text-slate-500">Unable to load focus areas right now.</p>
-      ) : deficits.length === 0 ? (
-        <p className="text-[13px] leading-snug text-slate-500">
-          No recurring phonics deficits detected recently.
-        </p>
+        <p className="text-sm text-slate-500">Unable to load the phonics breakdown right now.</p>
       ) : (
-        <ul className="space-y-2.5">
-          {deficits.map((deficit) => (
-            <li key={deficit.phonicsCategory} className="flex items-center justify-between gap-3 text-[13px] leading-snug text-slate-600">
-              <span className="flex min-w-0 gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-teal" />
-                <span className="truncate font-semibold text-slate-800">{deficit.phonicsCategory}</span>
-              </span>
-              <span className="shrink-0 text-xs font-bold text-slate-500">
-                {deficit.miscueCount} miscue{deficit.miscueCount === 1 ? "" : "s"}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
+          <SkillColumn
+            dotClassName="bg-emerald-500"
+            title="Strong Skills"
+            items={strongSkills}
+            emptyLabel="Nothing flagged as strong yet."
+          />
+          <SkillColumn
+            dotClassName="bg-amber-400"
+            title="Needs Practice"
+            items={needsPractice.map((deficit) => formatPhonicsCategory(deficit.phonicsCategory))}
+            emptyLabel="No moderate focus areas right now."
+          />
+          <SkillColumn
+            dotClassName="bg-rose-500"
+            title="Focus Area"
+            items={focusArea.map((deficit) => formatPhonicsCategory(deficit.phonicsCategory))}
+            emptyLabel="No focus areas detected."
+          />
+        </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -214,6 +284,21 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
           session: formatDate(session.startTime),
           words: session.totalWords
         })) ?? [],
+    [activeChild]
+  );
+  // ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown
+  // derived straight from recent session totals/duration, so the trend shows up
+  // even before the batch reporting job has produced a generated_reports row
+  const speedChartData = useMemo(
+    () =>
+      activeChild?.recentSessions
+        .slice()
+        .reverse()
+        .map((session) => ({
+          session: formatDate(session.startTime),
+          wcpm: calculateSessionWcpm(session)
+        }))
+        .filter((point): point is { session: string; wcpm: number } => point.wcpm !== null) ?? [],
     [activeChild]
   );
 
@@ -355,12 +440,55 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
                 </div>
                 <div className="grid gap-6">
                   <SummaryPanel child={activeChild} />
-                  <DeficitsPanel
-                    isLoading={reportQuery.isLoading}
-                    isError={reportQuery.isError}
-                    deficits={reportQuery.data?.deficits ?? []}
-                  />
                 </div>
+              </div>
+            </section>
+
+            {/* ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown */}
+            <section className="mt-6 rounded-3xl bg-[#FBEBD3] p-6">
+              <div className="rounded-2xl bg-[#F5C48A] p-5">
+                <div className="mb-4 flex items-center gap-2">
+                  <Gauge className="h-4 w-4 text-[#5c4322]" />
+                  <h3 className="text-sm font-bold text-slate-900">Reading Speed Over Time</h3>
+                </div>
+                {speedChartData.length > 0 ? (
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={speedChartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.4)" />
+                        <XAxis dataKey="session" tick={{ fontSize: 12, fill: "#5c4322" }} axisLine={false} tickLine={false} />
+                        <YAxis
+                          allowDecimals={false}
+                          tick={{ fontSize: 12, fill: "#5c4322" }}
+                          axisLine={false}
+                          tickLine={false}
+                          label={{ value: "Words per minute", angle: -90, position: "insideLeft", style: { fontSize: 11, fill: "#5c4322" } }}
+                        />
+                        <Tooltip
+                          contentStyle={{ borderRadius: 12, border: "none", fontSize: 12 }}
+                          formatter={(value: unknown) => {
+                            const numValue = typeof value === "number" ? value : 0;
+                            return [`${numValue.toLocaleString()} wcpm`, "Reading speed"];
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="wcpm"
+                          stroke="#ffffff"
+                          strokeWidth={3}
+                          dot={{ r: 5, fill: "#ffffff", stroke: "#E8695E", strokeWidth: 2 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="grid h-64 place-items-center rounded-2xl bg-white/50 p-6 text-center">
+                    <p className="text-sm font-bold leading-6 text-slate-600">
+                      No completed sessions with timing data to chart yet.
+                    </p>
+                  </div>
+                )}
               </div>
             </section>
 
@@ -407,6 +535,13 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
                 )}
               </div>
             </section>
+
+            {/* ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown */}
+            <PhonicsBreakdown
+              isLoading={reportQuery.isLoading}
+              isError={reportQuery.isError}
+              deficits={reportQuery.data?.deficits ?? []}
+            />
 
             <RecentSessionsList sessions={activeChild.recentSessions} />
           </>
@@ -462,6 +597,24 @@ function formatSessionAccuracy(session: ParentDashboardRecentSession) {
   }
 
   return `${Number(((session.correctWords / session.totalWords) * 100).toFixed(1))}% accuracy`;
+}
+
+// ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown
+// mirrors the wcpm (words correct per minute) terminology already used by the
+// generated report, computed live from a single session's duration
+function calculateSessionWcpm(session: ParentDashboardRecentSession): number | null {
+  if (!session.endTime) {
+    return null;
+  }
+
+  const durationMs = Date.parse(session.endTime) - Date.parse(session.startTime);
+  const durationMinutes = durationMs / 60_000;
+
+  if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+    return null;
+  }
+
+  return Math.round(session.correctWords / durationMinutes);
 }
 
 // ticket: build basic reading session history list for parent dashboard
