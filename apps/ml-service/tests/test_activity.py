@@ -26,7 +26,7 @@ def test_activity_recommendation(mock_get_supabase, mock_call_claude, monkeypatc
     # Mock Supabase table query response
     mock_supabase_client = MagicMock()
     mock_get_supabase.return_value = mock_supabase_client
-    
+
     mock_response = MagicMock()
     mock_response.data = [{
         "phonics_category": "sh-digraph",

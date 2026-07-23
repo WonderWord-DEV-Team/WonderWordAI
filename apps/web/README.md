@@ -218,6 +218,96 @@ Response `200 OK`:
 }
 ```
 
+### `POST /api/sessions/:id/audio`
+
+Uploads one request-scoped child reading audio blob for an open reading session. The browser calls
+the Next.js route only; the browser never receives `ML_SERVICE_KEY` and never calls the ML service
+directly.
+
+Required environment variables:
+
+- `ML_SERVICE_URL`
+- `ML_SERVICE_KEY`
+
+Request:
+
+- Content-Type: `multipart/form-data`
+- Required field: `audio`
+- Maximum audio size: `15 MB`
+- Supported audio MIME types: `audio/webm`, `audio/ogg`, `audio/mp4`, `audio/mpeg`, `audio/wav`
+
+Response `200 OK`:
+
+```json
+{
+  "data": {
+    "sessionId": "40000000-0000-0000-0000-000000000001",
+    "transcript": "The shark swims",
+    "words": [
+      {
+        "word": "The",
+        "start": 0,
+        "end": null
+      }
+    ],
+    "miscues": [
+      {
+        "word": "shark",
+        "expectedPhonemes": "SH AH R K",
+        "actualPhonemes": "S AH R K"
+      }
+    ]
+  }
+}
+```
+
+Current ML service contract:
+
+- Endpoint: `POST ${ML_SERVICE_URL}/transcribe`
+- Header: `X-Internal-Key: ${ML_SERVICE_KEY}`
+- Multipart field: `audio`
+- Response fields: `words`, `timestamps`, `transcript`, `segments`, `miscues`
+
+Authorization and error statuses:
+
+- `401 unauthorized`: no authenticated Supabase session.
+- `403 forbidden`: authenticated application user is not a child.
+- `404 session_not_found`: session does not exist, is not visible through RLS, or does not belong
+  to the authenticated child.
+- `409 session_closed`: session exists for the child but has already been closed.
+- `400 audio_missing`, `audio_empty`, `invalid_audio_type`: invalid multipart input.
+- `413 audio_too_large`: audio exceeds the configured limit.
+- `500 ml_configuration_error`: ML service key is missing.
+- `504 transcription_timeout`: ML service did not respond before the bounded timeout.
+- `502 transcription_unavailable`: ML service connection failure or upstream server error.
+- `502 malformed_transcription_response`: ML service response failed validation.
+- `500 persistence_failed`: structured derived reading data could not be inserted under RLS.
+
+Raw child audio has zero retention in the web app. The route does not upload audio to Supabase
+Storage, does not write audio to the repository or permanent disk, does not log request bodies or
+audio bytes, and does not include audio data in responses or telemetry. Only structured derived
+reading results may be stored in `public.reading_events`. With the current ML `/transcribe`
+implementation, miscues do not include the non-empty phoneme and phonics-category fields required by
+`reading_events`, so the route returns transcription results first and leaves session totals
+unchanged. Add an idempotency key or attempt identifier before aggregating totals from retried
+uploads.
+
+Local verification:
+
+```sh
+cd apps/web
+npm install
+npm run typecheck
+npm run lint
+npm run build
+
+cd ../..
+pytest apps/ml-service/tests/test_transcribe.py
+npx supabase db reset
+npx supabase db lint
+npx supabase test db
+```
+
 Common errors:
 
 ```json

@@ -1,13 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { getRoleHome, parseUserRole } from "@/lib/auth/types";
+import { parseUserRole } from "@/lib/auth/types";
 import { getSupabaseEnv, hasSupabaseEnv } from "@/lib/supabase/env";
-
-function copyCookies(from: NextResponse, to: NextResponse) {
-  from.cookies.getAll().forEach((cookie) => {
-    to.cookies.set(cookie);
-  });
-}
+import { copyCookies } from "@/lib/supabase/middleware-cookies";
+import { classifyMiddlewareRequest } from "@/lib/supabase/middleware-policy";
 
 function redirectWithCookies(
   request: NextRequest,
@@ -43,11 +39,12 @@ export async function updateSession(request: NextRequest) {
   });
 
   const pathname = request.nextUrl.pathname;
-  const isProtectedRoute = pathname.startsWith("/parent") || pathname.startsWith("/child");
-  const isLoginRoute = pathname === "/auth/login";
 
   if (!hasSupabaseEnv()) {
-    return isProtectedRoute ? redirectToLogin(request, supabaseResponse) : supabaseResponse;
+    const decision = classifyMiddlewareRequest(pathname, { status: "unauthenticated" });
+    return decision.kind === "redirect"
+      ? redirectToLogin(request, supabaseResponse, decision.error)
+      : supabaseResponse;
   }
 
   const { url, publishableKey } = getSupabaseEnv();
@@ -72,27 +69,25 @@ export async function updateSession(request: NextRequest) {
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data?.user) {
-    return isProtectedRoute ? redirectToLogin(request, supabaseResponse) : supabaseResponse;
+    const decision = classifyMiddlewareRequest(pathname, { status: "unauthenticated" });
+    return decision.kind === "redirect"
+      ? redirectToLogin(request, supabaseResponse, decision.error)
+      : supabaseResponse;
   }
 
   const role = parseUserRole(data.user.app_metadata?.user_role);
 
   if (!role) {
     await supabase.auth.signOut();
-    return redirectToLogin(request, supabaseResponse, "provisioning");
+    const decision = classifyMiddlewareRequest(pathname, { status: "invalid-role" });
+    return decision.kind === "redirect"
+      ? redirectToLogin(request, supabaseResponse, decision.error)
+      : supabaseResponse;
   }
 
-  if (isLoginRoute) {
-    return redirectWithCookies(request, supabaseResponse, getRoleHome(role));
-  }
+  const decision = classifyMiddlewareRequest(pathname, { status: "authenticated", role });
 
-  if (pathname.startsWith("/parent") && role !== "PARENT") {
-    return redirectWithCookies(request, supabaseResponse, getRoleHome(role));
-  }
-
-  if (pathname.startsWith("/child") && role !== "CHILD") {
-    return redirectWithCookies(request, supabaseResponse, getRoleHome(role));
-  }
-
-  return supabaseResponse;
+  return decision.kind === "redirect"
+    ? redirectWithCookies(request, supabaseResponse, decision.pathname)
+    : supabaseResponse;
 }

@@ -1,4 +1,5 @@
 import sys
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -7,7 +8,6 @@ from fastapi.testclient import TestClient
 
 # Make imports reliable whether pytest is run from the repository root or here.
 ML_SERVICE_DIR = Path(__file__).resolve().parents[1]
-SAMPLE_AUDIO = Path(__file__).with_name("sample.wav")
 if str(ML_SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(ML_SERVICE_DIR))
 
@@ -45,17 +45,15 @@ def test_transcribe(mock_transcribe, monkeypatch):
         ]
     }
 
-    with SAMPLE_AUDIO.open("rb") as f:
-
-        response = client.post(
-            "/transcribe",
-            headers={
-                "X-Internal-Key": "test-key"
-            },
-            files={
-                "audio": ("sample.wav", f, "audio/wav")
-            }
-        )
+    response = client.post(
+        "/transcribe",
+        headers={
+            "X-Internal-Key": "test-key"
+        },
+        files={
+            "audio": ("sample.wav", BytesIO(b"RIFF....WAVEfmt "), "audio/wav")
+        }
+    )
 
     assert response.status_code == 200
 
