@@ -1,7 +1,12 @@
+/**
+ * ILLUSTRATION TESTS (MOCKED)
+ * This file tests the illustration pipeline flow without consuming OpenAI/Unsplash credits (mocked keys).
+ * Usage: Automatically run with 'npx vitest run illustrations'.
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getWordSlug } from "./slug";
-import { searchUnsplash } from "./unsplash/client";
-import { generateDalleImage } from "./dalle/client";
+import { getWordSlug } from "../../lib/illustrations/slug";
+import { searchUnsplash } from "../../lib/illustrations/unsplash/client";
+import { generateDalleImage } from "../../lib/illustrations/dalle/client";
 
 // Setup mocks
 const mockList = vi.fn();
@@ -133,7 +138,7 @@ describe("Illustrations Pipeline Tests", () => {
       expect(url).toBe("https://supabase/illustrations/pink-dragon.png");
       expect(mockGenerate).toHaveBeenCalledWith(
         expect.objectContaining({ model: "gpt-image-2" }),
-        expect.objectContaining({ timeout: 3000 })
+        expect.objectContaining({ timeout: 30000 })
       );
       expect(mockUpload).toHaveBeenCalledWith("pink-dragon.png", expect.any(Buffer), {
         contentType: "image/png",

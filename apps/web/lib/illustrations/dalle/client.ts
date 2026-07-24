@@ -11,7 +11,10 @@ function getOpenAIClient(): OpenAI {
     if (!apiKey) {
       throw new Error("Missing OPENAI_API_KEY");
     }
-    openaiClient = new OpenAI({ apiKey });
+    openaiClient = new OpenAI({
+      apiKey,
+      maxRetries: 0
+    });
   }
   return openaiClient;
 }
@@ -28,6 +31,7 @@ export async function generateDalleImage(word: string): Promise<string | null> {
 
   // 1. Check if image is already cached in Supabase Storage
   try {
+    console.log("[DALL-E Client] Checking storage cache for:", fileName);
     const { data: existingFiles, error: listError } = await supabase.storage
       .from(bucketName)
       .list("", { search: fileName });
@@ -36,16 +40,19 @@ export async function generateDalleImage(word: string): Promise<string | null> {
       const isCached = existingFiles.some(file => file.name === fileName);
       if (isCached) {
         const { data: { publicUrl } } = supabase.storage.from(bucketName).getPublicUrl(fileName);
+        console.log("[DALL-E Client] Cache hit! Public URL:", publicUrl);
         return publicUrl;
       }
     }
+    console.log("[DALL-E Client] Cache miss.");
   } catch (e) {
-    console.warn("Storage cache check failed, proceeding to generate:", e);
+    console.warn("[DALL-E Client] Storage cache check failed, proceeding to generate:", e);
   }
 
-  // 2. Call OpenAI API with 3s timeout
+  // 2. Call OpenAI API with 10s timeout
   try {
     const openai = getOpenAIClient();
+    console.log("[DALL-E Client] Calling OpenAI images.generate for word:", word);
     const response = await openai.images.generate(
       {
         model: "gpt-image-2",
@@ -54,18 +61,39 @@ export async function generateDalleImage(word: string): Promise<string | null> {
         size: "1024x1024"
       },
       {
-        timeout: 3000 // 3 seconds timeout
+        timeout: 30000 // 30 seconds timeout
       }
     );
 
+    console.log("[DALL-E Client] OpenAI call responded.");
     const base64Image = response.data?.[0]?.b64_json;
-    if (!base64Image) {
+    const tempUrl = response.data?.[0]?.url;
+    console.log("[DALL-E Client] base64 length:", base64Image?.length ?? 0, "tempUrl:", tempUrl);
+
+    let imageBuffer: Buffer;
+    if (base64Image) {
+      imageBuffer = Buffer.from(base64Image, "base64");
+    } else if (tempUrl) {
+      try {
+        console.log("[DALL-E Client] Downloading temp URL:", tempUrl);
+        const imageRes = await fetch(tempUrl);
+        if (!imageRes.ok) {
+          throw new Error(`Failed to fetch image from OpenAI URL: ${imageRes.status}`);
+        }
+        imageBuffer = Buffer.from(await imageRes.arrayBuffer());
+        console.log("[DALL-E Client] Downloaded temp URL. Size in bytes:", imageBuffer.length);
+      } catch (fetchErr) {
+        console.error("[DALL-E Client] Failed to download image from OpenAI temp URL:", fetchErr);
+        return tempUrl; // Return the temp URL directly as a fallback
+      }
+    } else {
+      console.log("[DALL-E Client] No image data returned from OpenAI.");
       return null;
     }
 
     // 3. Upload generated image to Supabase Storage
     try {
-      const imageBuffer = Buffer.from(base64Image, "base64");
+      console.log("[DALL-E Client] Uploading to Supabase Storage...");
       const { error: uploadError } = await supabase.storage
         .from(bucketName)
         .upload(fileName, imageBuffer, {
@@ -74,19 +102,20 @@ export async function generateDalleImage(word: string): Promise<string | null> {
         });
 
       if (uploadError) {
-        console.error("Failed to upload generated image to storage:", uploadError);
-        // Fallback: return data URI so the user still sees the image
-        return `data:image/png;base64,${base64Image}`;
+        console.error("[DALL-E Client] Failed to upload generated image to storage:", uploadError);
+        // Fallback: return data URI or temp URL so the user still sees the image
+        return base64Image ? `data:image/png;base64,${base64Image}` : (tempUrl || null);
       }
 
       const { data: { publicUrl } } = supabase.storage.from(bucketName).getPublicUrl(fileName);
+      console.log("[DALL-E Client] Upload success! Public URL:", publicUrl);
       return publicUrl;
     } catch (uploadException) {
-      console.error("Error during storage upload exception:", uploadException);
-      return `data:image/png;base64,${base64Image}`;
+      console.error("[DALL-E Client] Error during storage upload exception:", uploadException);
+      return base64Image ? `data:image/png;base64,${base64Image}` : (tempUrl || null);
     }
   } catch (e) {
-    console.error("DALL-E image generation failed or timed out:", e);
+    console.error("[DALL-E Client] DALL-E image generation failed or timed out:", e);
   }
   return null;
 }
