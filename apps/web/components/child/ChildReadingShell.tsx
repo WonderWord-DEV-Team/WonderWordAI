@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { useChildSession } from "@/components/child/ChildSessionContext";
+import { KaraokeText } from "@/components/child/KaraokeText";
+import { ReadingRecorder } from "@/components/child/ReadingRecorder";
 import { StoryTab } from "@/components/child/StoryTab";
 import { BrandHeader } from "@/components/shared/BrandHeader";
 import { MetricCard } from "@/components/shared/MetricCard";
@@ -12,6 +14,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { WorksheetCapture } from "@/components/worksheet/WorksheetCapture";
 import { useCreateSession } from "@/hooks/useSessions";
 import type { AuthContext } from "@/lib/auth/types";
+import { normalizeKaraokeWord, type KaraokeTimeline } from "@/lib/karaoke/timeline";
 
 type ChildReadingShellProps = {
   auth: AuthContext;
@@ -35,6 +38,9 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
     worksheetText,
     imageKeywords,
     worksheetStatus,
+    latestTranscription,
+    setLatestTranscription,
+    setActiveWordIndex,
     setWorksheetStatus,
     setOcrResult,
     clearOcrResult
@@ -45,6 +51,16 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
   const isReadingReady = Boolean(worksheetText);
   // ticket: implement image rendering inside story tab (skeleton + placeholder)
   const [activeTab, setActiveTab] = useState<ReadingPanelTab>("text");
+  const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeTimeline | null>(null);
+  const [playbackState, setPlaybackState] = useState({
+    activeIndex: -1,
+    currentTime: 0,
+    playbackCompleted: false
+  });
+  const miscueWords = useMemo(
+    () => new Set(latestTranscription?.miscues.map((miscue) => normalizeKaraokeWord(miscue.word)) ?? []),
+    [latestTranscription]
+  );
 
   const ensureOpenSession = useCallback(async () => {
     if (uuidPattern.test(sessionId)) {
@@ -103,7 +119,16 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
                   status={worksheetStatus}
                   onStatusChange={setWorksheetStatus}
                   ensureSession={ensureOpenSession}
-                  onOcrComplete={setOcrResult}
+                  onOcrComplete={(result) => {
+                    setKaraokeTimeline(null);
+                    setPlaybackState({
+                      activeIndex: -1,
+                      currentTime: 0,
+                      playbackCompleted: false
+                    });
+                    setLatestTranscription(null);
+                    setOcrResult(result);
+                  }}
                 />
               </div>
 
@@ -132,9 +157,14 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
                   <StoryTab />
                 ) : worksheetText ? (
                   <div className="rounded-[var(--radius-card)] bg-white/88 p-5">
-                    <p className="whitespace-pre-wrap text-2xl font-extrabold leading-10 text-navy">
-                      {worksheetText}
-                    </p>
+                    <KaraokeText
+                      timeline={karaokeTimeline}
+                      fallbackText={worksheetText}
+                      activeIndex={playbackState.activeIndex}
+                      currentTime={playbackState.currentTime}
+                      playbackCompleted={playbackState.playbackCompleted}
+                      miscueWords={miscueWords}
+                    />
 
                     {imageKeywords.length > 0 ? (
                       <div className="mt-5 flex flex-wrap gap-2" aria-label="Image keywords">
@@ -151,7 +181,16 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
 
                     <button
                       type="button"
-                      onClick={clearOcrResult}
+                      onClick={() => {
+                        setKaraokeTimeline(null);
+                        setPlaybackState({
+                          activeIndex: -1,
+                          currentTime: 0,
+                          playbackCompleted: false
+                        });
+                        setLatestTranscription(null);
+                        clearOcrResult();
+                      }}
                       className="mt-6 min-h-12 rounded-[var(--radius-card)] border border-coral/30 px-4 py-3 text-sm font-black text-coral transition hover:bg-coral/10"
                     >
                       Rescan worksheet
@@ -169,22 +208,23 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
           </div>
 
           <aside className="grid content-start gap-5">
+            <ReadingRecorder
+              sessionId={sessionId}
+              worksheetText={worksheetText}
+              ensureSession={ensureOpenSession}
+              onTimelineChange={setKaraokeTimeline}
+              onPlaybackChange={(state) => {
+                setPlaybackState(state);
+                setActiveWordIndex(state.activeIndex);
+              }}
+              onTranscriptionComplete={setLatestTranscription}
+            />
             <section className="rounded-[var(--radius-card)] border border-coral/25 bg-white p-5 shadow-soft">
-              <h2 className="text-lg font-black text-navy">Reading controls</h2>
-              <p className="mt-2 text-sm leading-6 text-muted">
-                {isReadingReady ? "The passage is ready when the reading tools are connected." : "Scan a worksheet to get ready."}
-              </p>
+              <h2 className="text-lg font-black text-navy">Session</h2>
               <button
                 type="button"
                 disabled
-                className="mt-5 min-h-14 w-full cursor-not-allowed rounded-[var(--radius-card)] bg-slate-200 px-5 text-base font-black text-slate-500"
-              >
-                Start reading
-              </button>
-              <button
-                type="button"
-                disabled
-                className="mt-3 min-h-12 w-full cursor-not-allowed rounded-[var(--radius-card)] border border-slate-200 px-5 text-sm font-extrabold text-slate-500"
+                className="min-h-12 w-full cursor-not-allowed rounded-[var(--radius-card)] border border-slate-200 px-5 text-sm font-extrabold text-slate-500"
               >
                 End Session
               </button>
