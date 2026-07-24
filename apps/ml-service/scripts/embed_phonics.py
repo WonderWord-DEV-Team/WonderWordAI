@@ -31,35 +31,35 @@ phonics_knowledge = [
     {
         "id": "short-a-1",
         "category": "short-a",
-        "text": "short-a: brief clipped A sound in CVC words, cat map sat bag, vowel between two consonants makes short sound",
+        "text": "short-a: brief clipped A sound in CVC words, cat map sat bag fan cap, vowel A squeezed between two consonants makes short flat sound like apple ant ask",
         "phonics_rule": "Short A makes the /a/ sound as in 'cat'. It appears in simple CVC words (consonant-vowel-consonant) and is the first vowel sound children learn.",
         "example_words": ["cat", "map", "sat", "bag", "fan", "cap", "hat", "rat", "man", "pan"]
     },
     {
         "id": "short-e-1",
         "category": "short-e",
-        "text": "short-e: short vowel E sound in bed, red, leg, men, ten, pet, hen, wet, set, net",
+        "text": "short-e: brief clipped E sound in CVC words, bed red hen wet set net leg men ten, vowel E between consonants makes short sound like egg elephant end",
         "phonics_rule": "Short E makes the /e/ sound as in 'bed'. It appears in simple CVC words (consonant-vowel-consonant) and is the second vowel sound children learn.",
         "example_words": ["bed", "red", "leg", "men", "ten", "pet", "hen", "wet", "set", "net"]
     },
     {
         "id": "short-i-1",
         "category": "short-i",
-        "text": "short-i: short vowel I sound in sit, hit, bit, lid, kid, pig, win, pin, tin, fin",
+        "text": "short-i: brief clipped I sound in CVC words, sit hit bit lid kid win pin tin fin, vowel I between consonants makes short sound like itch igloo insect",
         "phonics_rule": "Short I makes the /ih/ sound as in 'sit'. It appears in simple CVC words (consonant-vowel-consonant) and is the third vowel sound children learn.",
         "example_words": ["sit", "hit", "bit", "lid", "kid", "pig", "win", "pin", "tin", "fin"]
     },
     {
         "id": "short-o-1",
         "category": "short-o",
-        "text": "short-o: short vowel O sound in hot, dog, top, box, pot, hop, mop, pop, cop",
+        "text": "short-o: brief clipped O sound in CVC words, hot top box pot hop mop pop cop log, vowel O between consonants makes short sound like octopus olive odd",
         "phonics_rule": "Short O makes the /aa/ sound as in 'hot'. It appears in simple CVC words (consonant-vowel-consonant) and is the fourth vowel sound children learn.",
         "example_words": ["hot", "dog", "top", "box", "pot", "hop", "mop", "pop", "cop"]
     },
     {
         "id": "short-u-1",
         "category": "short-u",
-        "text": "short-u: short vowel U sound in sun, run, fun, cup, tub, rub, hug, bug, jug",
+        "text": "short-u: brief clipped U sound in CVC words, sun run fun cup tub rub hug jug mud, vowel U between consonants makes short sound like umbrella under ugly",
         "phonics_rule": "Short U makes the /uh/ sound as in 'sun'. It appears in simple CVC words (consonant-vowel-consonant) and is the fifth vowel sound children learn.",
         "example_words": ["sun", "run", "fun", "cup", "tub", "rub", "hug", "bug", "jug"]
     },
@@ -103,7 +103,7 @@ phonics_knowledge = [
     {
         "id": "ck-1",
         "category": "ck-digraph",
-        "text": "ck-digraph: CK sound in lock, pack, sack, track, truck",
+        "text": "ck-digraph: CK consonant pair at end of words making single K sound, pack sack track truck duck back neck kick sock, C and K together after short vowel",
         "phonics_rule": "CK is a consonant digraph — two letters C and K that together make one sound /k/. The individual C and K sounds disappear completely.",
         "example_words": ["lock", "pack", "sack", "track", "truck"]
     },
@@ -133,14 +133,14 @@ phonics_knowledge = [
     {
         "id": "long-i-1",
         "category": "long-i",
-        "text": "long-i: silent-e pattern in like, bike, time, fine, line",
+        "text": "long-i: magic-e silent-e rule makes I say its name eye sound, bike like time fine line kite hide ride smile, vowel-consonant-e pattern where silent e at end creates long I sound not short ih",
         "phonics_rule": "Long I uses the silent-e pattern (i_e) — the final E is silent but makes the I say its name /eye/. Remove the E and the vowel goes short.",
         "example_words": ["like", "bike", "time", "fine", "line"]
     },
     {
         "id": "long-o-1",
         "category": "long-o",
-        "text": "long-o: silent-e pattern in home, close, note, phone, stone",
+        "text": "long-o: magic-e silent-e rule makes O say its name, home note stone rope hope joke dome, vowel-consonant-e pattern where silent e at end creates long O sound",
         "phonics_rule": "Long O uses the silent-e pattern (o_e) — the final E is silent but makes the O say its name /oh/. Remove the E and the vowel goes short.",
         "example_words": ["home", "close", "note", "phone", "stone", "rope", "hope", "joke", "tome", "dome"]
     },
