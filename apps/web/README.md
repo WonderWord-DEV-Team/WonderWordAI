@@ -48,10 +48,51 @@ TanStack Query owns server state:
 - current active session ID;
 - OCR text and image keywords;
 - worksheet upload/readiness status;
-- active word position and local correction UI state.
+- active word position, latest structured transcription result, and local correction UI state.
 
 Do not move request-scoped OCR text, recording state, karaoke position, or other transient reading
 state into TanStack Query.
+
+## Child Karaoke Reading Flow
+
+The child reading screen uses the existing session audio API for the MVP read-aloud loop:
+
+1. OCR text is loaded into `ChildSessionContext` after worksheet scan.
+2. The child presses **Start Reading**. The browser requests microphone permission and creates a
+   `MediaRecorder` only after that user action.
+3. The child reads one sentence or short passage, then presses **Stop**. Recording also stops at the
+   current 30 second safety limit.
+4. The browser sends one complete temporary `Blob` to `POST /api/sessions/[sessionId]/audio` through
+   `lib/audio/browser-client.ts`.
+5. The response is validated with `sessionAudioResponseSchema`, converted into a karaoke timeline,
+   and replayed locally from an `HTMLAudioElement`.
+6. `requestAnimationFrame` reads `audio.currentTime` while playback runs and highlights the matching
+   OCR word from the WhisperX timestamps. Pause, resume, restart, and seek events recompute the
+   active word from the audio element.
+
+Supported recording formats are selected at runtime with `MediaRecorder.isTypeSupported()`. The
+preference order is WebM/Opus, WebM, MP4/AAC, MP4, Ogg/Opus, Ogg, then WAV. The server route accepts
+the normalized base types listed in `lib/audio/schema.ts`; Safari commonly chooses MP4 while Chrome
+usually chooses WebM.
+
+Karaoke alignment lives in `lib/karaoke/timeline.ts`. It tokenizes OCR text while preserving
+punctuation and line breaks, normalizes capitalization/punctuation/apostrophes, and uses ordered
+sequence alignment instead of `indexOf` so repeated words stay in the correct order after skipped or
+extra spoken words. Unmatched transcript words are kept out of the worksheet highlight path, and
+skipped worksheet words can be marked after playback without shifting later matches.
+
+Privacy: raw child audio is not stored in Supabase, context, localStorage, or TanStack Query. The
+recording `Blob`, object URL, `MediaStream`, `MediaRecorder`, and `HTMLAudioElement` are
+component-local only. Stream tracks stop after recording ends or fails, object URLs are revoked when
+replaced or unmounted, and only derived structured transcription/miscue data may remain in context.
+
+Known limitations:
+
+- This is not live speech streaming; there are no WebSockets, SSE, or continuous uploads.
+- Word end times may be inferred from the next word start or a short bounded fallback when the server
+  only returns start timestamps.
+- Miscues are retained for the next correction step, but the MVP shows a single post-playback entry
+  point instead of interrupting playback.
 
 ### Browser API client
 
@@ -297,6 +338,7 @@ Local verification:
 ```sh
 cd apps/web
 npm install
+npm run test:karaoke
 npm run typecheck
 npm run lint
 npm run build
