@@ -1,6 +1,6 @@
 import { Rocket } from "lucide-react";
 import type { PracticeRecommendation } from "@/lib/practice/schema";
-//import { formatPhonicsCategory } from "@/lib/phonics/format";
+import { formatPhonicsCategory } from "@/lib/phonics/format";
 
 type PrintableActivityCardProps = {
   activity: PracticeRecommendation;
