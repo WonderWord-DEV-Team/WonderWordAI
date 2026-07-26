@@ -1,4 +1,4 @@
-name: ML Service CI
+name: ML Service
 
 on:
   push:
