@@ -24,3 +24,7 @@ DEVICE = os.getenv("DEVICE", "cpu")
 ML_SERVICE_KEY = os.getenv("ML_SERVICE_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
 CONFIDENCE_THRESHOLD = 0.85
+TTS_PROVIDER = os.getenv("TTS_PROVIDER")
+TTS_VOICE = os.getenv("TTS_VOICE", "default")
+TTS_MODEL = os.getenv("TTS_MODEL", "default")
+TTS_SPEAKING_RATE = os.getenv("TTS_SPEAKING_RATE", "1.0")
