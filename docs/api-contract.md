@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Author:** Matheus Emanuel da Silva (Lead Engineer)  
-**Last updated:** July 7, 2026  
+**Last updated:** July 26, 2026  
 **Status:** Active — do not change field names or types without updating this doc and notifying the team.
 
 ---
@@ -126,6 +126,49 @@ audio: <binary audio blob>
 // 500 — WhisperX model error
 { "error": "transcription_failed", "message": "Internal transcription error." }
 ```
+
+---
+
+### `POST /narrate`
+
+Generates synthetic narration audio for a stored story and returns WhisperX-aligned word timestamps.
+This endpoint is internal only. Browsers must call `POST /api/stories/:storyId/narration` in the
+Next.js app instead.
+
+**Request:**
+- Content-Type: `application/json`
+- Header: `X-Internal-Key` required
+
+```json
+{
+  "story_id": "40000000-0000-4000-8000-000000000010",
+  "text": "The bird flew to the moon."
+}
+```
+
+**Response `200 OK`:**
+```json
+{
+  "audio_base64": "...",
+  "mime_type": "audio/mpeg",
+  "duration": 8.42,
+  "words": [
+    {
+      "word": "The",
+      "start": 0.0,
+      "end": 0.28
+    }
+  ]
+}
+```
+
+The ML service generates TTS audio from the exact story text sent by the trusted web route, writes
+request-scoped temp audio only long enough to run WhisperX alignment, removes temp files in a
+`finally` block, and does not persist generated audio on the ML server. Returned timestamps are in
+seconds, chronological, finite, and include non-null `start` and `end` values for every word.
+
+No production TTS provider is selected in this repository yet. Until a provider implementation is
+added, `/narrate` returns `503` with a configuration error. Tests use a deterministic fake provider.
 
 ---
 
@@ -369,9 +412,15 @@ Both services must have these variables configured before Week 1 ends.
 | `ML_SERVICE_URL` | Web App | Base URL of the ML service (no trailing slash) |
 | `ML_SERVICE_KEY` | Web App + ML Service | Shared secret for X-Internal-Key auth |
 | `SUPABASE_URL` | Web App + ML Service | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | ML Service | Service role key (bypasses RLS — only in ML service, never in browser) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Web App + ML Service | Service role key for trusted server operations; never expose to browser |
 | `SUPABASE_ANON_KEY` | Web App | Public anon key (safe to use client-side) |
 | `ANTHROPIC_API_KEY` | Web App | Claude API key — only called from Next.js, never from ML service |
+| `STORY_NARRATION_BUCKET` | Web App | Private Supabase Storage bucket for generated narration audio, default `story-narrations` |
+| `STORY_NARRATION_SIGNED_URL_TTL_SECONDS` | Web App | Signed narration URL lifetime, default `3600` |
+| `TTS_PROVIDER` | Web App + ML Service | Non-secret provider name used for ML selection and web cache versioning |
+| `TTS_VOICE` | Web App + ML Service | Non-secret voice identifier used for TTS and narration cache versioning |
+| `TTS_MODEL` | Web App + ML Service | Non-secret TTS model identifier used for cache versioning |
+| `TTS_SPEAKING_RATE` | Web App + ML Service | Speaking rate used for cache versioning, default `1.0` |
 | `SIMILARITY_THRESHOLD` | ML Service | Wav2Vec2 pass threshold (default: `0.85`) |
 | `OPENAI_API_KEY` | Web App | DALL-E fallback image generation |
 | `UNSPLASH_ACCESS_KEY` | Web App | Unsplash image lookup |
