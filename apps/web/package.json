@@ -8,9 +8,14 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
+    "test:auth": "tsc --module commonjs --target es2022 --moduleResolution node --esModuleInterop --skipLibCheck --strict --noEmit false --outDir .test-output --rootDir . lib/supabase/middleware.test.ts lib/supabase/middleware-policy.ts lib/supabase/middleware-cookies.ts lib/auth/types.ts && node .test-output/lib/supabase/middleware.test.js",
+    "test:karaoke": "tsc --module commonjs --target es2022 --moduleResolution node --esModuleInterop --skipLibCheck --strict --noEmit false --outDir .test-output --rootDir . lib/karaoke/timeline.test.ts lib/karaoke/timeline.ts lib/audio/schema.ts && node .test-output/lib/karaoke/timeline.test.js",
+    "test:narration": "tsc --module commonjs --target es2022 --moduleResolution node --esModuleInterop --skipLibCheck --strict --noEmit false --outDir .test-output --rootDir . lib/narration/pipeline.test.ts lib/narration/pipeline.ts lib/narration/schema.ts && node .test-output/lib/narration/pipeline.test.js",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
+    "@stripe/stripe-js": "^9.12.1",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.2",
     "@tanstack/react-query": "^5.101.2",
@@ -21,6 +26,7 @@
     "react-dom": "18.3.1",
     "recharts": "^3.9.2",
     "server-only": "^0.0.1",
+    "stripe": "^22.3.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {

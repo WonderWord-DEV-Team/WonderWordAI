@@ -8,9 +8,13 @@ export type AuthContext = {
 };
 
 export function parseUserRole(value: unknown): UserRole | null {
-  return typeof value === "string" && USER_ROLES.includes(value as UserRole)
-    ? (value as UserRole)
-    : null;
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.toUpperCase();
+
+  return USER_ROLES.includes(normalized as UserRole) ? (normalized as UserRole) : null;
 }
 
 export function getRoleHome(role: UserRole) {

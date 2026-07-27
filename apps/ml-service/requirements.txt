@@ -10,3 +10,4 @@ whisperx==3.8.4
 imageio-ffmpeg
 editdistance
 supabase
+anthropic

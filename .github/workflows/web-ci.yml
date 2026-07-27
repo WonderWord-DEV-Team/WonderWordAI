@@ -1,33 +1,49 @@
-name: Web Frontend CI
+name: Web Frontend
 
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'apps/web/**'
   pull_request:
     branches: [ main ]
-    paths:
-      - 'apps/web/**'
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'apps/web/**'
+
   build:
     name: Typecheck and Build
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          
       - name: Install dependencies
         run: |
           cd apps/web
           echo "Installing dependencies..."
-          
       - name: Run Lint & Build
         run: |
           cd apps/web
           echo "Running typechecks and production build..."
+
+  build-skip:
+    name: Typecheck and Build
+    needs: changes
+    if: needs.changes.outputs.web != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "No web changes — skipping."
