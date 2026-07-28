@@ -40,10 +40,25 @@ export async function signInWithPassword(
     };
   }
 
-  const { data, error: claimsError } = await supabase.auth.getClaims();
-  const role = parseUserRole(data?.claims.user_role);
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-  if (claimsError || !data?.claims || !role) {
+  if (userError || !user) {
+    await supabase.auth.signOut();
+    return {
+      email,
+      message: "We could not sign you in with those credentials."
+    };
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("role")
+    .eq("auth_id", user.id)
+    .single();
+
+  const role = parseUserRole(profile?.role);
+
+  if (profileError || !role) {
     await supabase.auth.signOut();
     return {
       email,

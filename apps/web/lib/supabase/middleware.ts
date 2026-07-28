@@ -75,7 +75,13 @@ export async function updateSession(request: NextRequest) {
       : supabaseResponse;
   }
 
-  const role = parseUserRole(data.user.app_metadata?.user_role);
+  const { data: profile } = await supabase
+    .from("users")
+    .select("role")
+    .eq("auth_id", data.user.id)
+    .single();
+
+  const role = parseUserRole(profile?.role);
 
   if (!role) {
     await supabase.auth.signOut();
