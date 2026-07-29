@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { useChildReport } from "@/hooks/useChildReport";
 import { useParentDashboard } from "@/hooks/useParentDashboard";
+// ticket: integrate playful practice recommendations into parent dashboard
+import { usePracticeRecommendation } from "@/hooks/usePracticeRecommendation";
+import { PrintableActivityCard } from "@/components/parent/PrintableActivityCard";
+import { PracticeActivityModal } from "@/components/parent/PracticeActivityModal";
+import { formatPhonicsCategory } from "@/lib/phonics/format";
 import type { AuthContext } from "@/lib/auth/types";
 import {
   type ParentDashboardChild,
@@ -11,6 +16,8 @@ import {
   type ParentDashboardRecentSession
 } from "@/lib/parent/dashboard";
 import type { ChildReportDeficit } from "@/lib/reports/schema";
+import type { PracticeRecommendation } from "@/lib/practice/schema";
+import type { UseQueryResult } from "@tanstack/react-query";
 import {
   LineChart,
   Line,
@@ -20,7 +27,15 @@ import {
   ResponsiveContainer,
   Tooltip
 } from "recharts";
-import { AlertTriangle, BookOpen, CalendarDays, Lightbulb, Rocket, Target } from "lucide-react";
+import {
+  AlertTriangle,
+  BookOpen,
+  CalendarDays,
+  Gauge,
+  Lightbulb,
+  Rocket,
+  Sparkles
+} from "lucide-react";
 
 const PERIOD_OPTIONS: { label: string; value: ParentDashboardPeriod }[] = [
   { label: "7 days", value: "7d" },
@@ -28,6 +43,30 @@ const PERIOD_OPTIONS: { label: string; value: ParentDashboardPeriod }[] = [
   { label: "30 days", value: "30d" },
   { label: "All", value: "all" }
 ];
+
+// ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown
+// there's no dedicated "mastery" signal in the data model yet, so these
+// foundational categories are treated as strong by default unless the child
+// currently has a matching deficit for them
+const FOUNDATIONAL_SKILLS = ["Sight words", "Short vowels", "CVC words", "Letter blends"];
+
+function splitDeficitsBySeverity(deficits: ChildReportDeficit[]) {
+  const sorted = [...deficits].sort((a, b) => b.miscueCount - a.miscueCount);
+  const focusCount = sorted.length === 0 ? 0 : Math.max(1, Math.ceil(sorted.length / 2));
+
+  return {
+    focusArea: sorted.slice(0, focusCount),
+    needsPractice: sorted.slice(focusCount)
+  };
+}
+
+function deriveStrongSkills(deficits: ChildReportDeficit[]) {
+  const deficitCategories = deficits.map((deficit) => deficit.phonicsCategory.toLowerCase());
+
+  return FOUNDATIONAL_SKILLS.filter(
+    (skill) => !deficitCategories.some((category) => category.includes(skill.toLowerCase()))
+  );
+}
 
 function StatCard({
   label,
@@ -58,7 +97,7 @@ function SummaryPanel({ child }: { child: ParentDashboardChild }) {
     <div className="rounded-2xl border-2 border-dashed border-rose-300/70 bg-white p-5">
       <div className="mb-3 flex items-center gap-2">
         <Lightbulb className="h-4 w-4 fill-amber-400 text-amber-400" />
-        <h3 className="text-sm font-bold text-slate-900">Summary</h3>
+        <h3 className="text-sm font-bold text-slate-900">Insights</h3>
       </div>
       <ul className="space-y-2.5">
         <li className="flex gap-2 text-[13px] leading-snug text-slate-600">
@@ -76,8 +115,41 @@ function SummaryPanel({ child }: { child: ParentDashboardChild }) {
   );
 }
 
-// ticket: wire parent dashboard to /api/reports/[childId] (wpm, accuracy, deficits)
-function DeficitsPanel({
+// ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown
+function SkillColumn({
+  dotClassName,
+  title,
+  items,
+  emptyLabel
+}: {
+  dotClassName: string;
+  title: string;
+  items: string[];
+  emptyLabel: string;
+}) {
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-2">
+        <span className={`h-2.5 w-2.5 rounded-full ${dotClassName}`} />
+        <h3 className="text-sm font-bold text-slate-900">{title}</h3>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-[13px] leading-snug text-slate-400">{emptyLabel}</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {items.map((item) => (
+            <li key={item} className="text-[13px] leading-snug text-slate-600">
+              • {item}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown
+function PhonicsBreakdown({
   isLoading,
   isError,
   deficits
@@ -86,36 +158,120 @@ function DeficitsPanel({
   isError: boolean;
   deficits: ChildReportDeficit[];
 }) {
+  const { focusArea, needsPractice } = useMemo(() => splitDeficitsBySeverity(deficits), [deficits]);
+  const strongSkills = useMemo(() => deriveStrongSkills(deficits), [deficits]);
+
   return (
-    <div className="rounded-2xl border-2 border-dashed border-teal/40 bg-white p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <Target className="h-4 w-4 text-teal" />
-        <h3 className="text-sm font-bold text-slate-900">Focus Areas</h3>
-      </div>
+    <section className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
       {isLoading ? (
-        <p className="text-[13px] leading-snug text-slate-500">Loading phonics deficits…</p>
+        <p className="text-sm text-slate-500">Loading phonics breakdown…</p>
       ) : isError ? (
-        <p className="text-[13px] leading-snug text-slate-500">Unable to load focus areas right now.</p>
-      ) : deficits.length === 0 ? (
-        <p className="text-[13px] leading-snug text-slate-500">
-          No recurring phonics deficits detected recently.
-        </p>
+        <p className="text-sm text-slate-500">Unable to load the phonics breakdown right now.</p>
       ) : (
-        <ul className="space-y-2.5">
-          {deficits.map((deficit) => (
-            <li key={deficit.phonicsCategory} className="flex items-center justify-between gap-3 text-[13px] leading-snug text-slate-600">
-              <span className="flex min-w-0 gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-teal" />
-                <span className="truncate font-semibold text-slate-800">{deficit.phonicsCategory}</span>
-              </span>
-              <span className="shrink-0 text-xs font-bold text-slate-500">
-                {deficit.miscueCount} miscue{deficit.miscueCount === 1 ? "" : "s"}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
+          <SkillColumn
+            dotClassName="bg-emerald-500"
+            title="Strong Skills"
+            items={strongSkills}
+            emptyLabel="Nothing flagged as strong yet."
+          />
+          <SkillColumn
+            dotClassName="bg-amber-400"
+            title="Needs Practice"
+            items={needsPractice.map((deficit) => formatPhonicsCategory(deficit.phonicsCategory))}
+            emptyLabel="No moderate focus areas right now."
+          />
+          <SkillColumn
+            dotClassName="bg-rose-500"
+            title="Focus Area"
+            items={focusArea.map((deficit) => formatPhonicsCategory(deficit.phonicsCategory))}
+            emptyLabel="No focus areas detected."
+          />
+        </div>
       )}
-    </div>
+    </section>
+  );
+}
+
+// ticket: integrate playful practice recommendations into parent dashboard
+// the whole card is a button that opens the scrollable PracticeActivityModal
+function PracticeCard({
+  category,
+  query,
+  onOpen
+}: {
+  category: string;
+  query: UseQueryResult<PracticeRecommendation>;
+  onOpen: (category: string) => void;
+}) {
+  const canOpen = Boolean(query.data);
+
+  return (
+    <button
+      type="button"
+      onClick={() => canOpen && onOpen(category)}
+      disabled={!canOpen}
+      className="rounded-2xl bg-coral p-5 text-left text-white shadow-sm transition-transform enabled:hover:-translate-y-0.5 enabled:hover:shadow-md disabled:cursor-default"
+    >
+      {query.isLoading ? (
+        <p className="text-sm font-semibold text-white/80">Finding an offline activity…</p>
+      ) : query.isError || !query.data ? (
+        <p className="text-sm font-semibold text-white/80">Unable to load this activity.</p>
+      ) : (
+        <>
+          <h3 className="text-sm font-bold leading-snug">{query.data.title}</h3>
+          <p className="mt-1.5 text-[13px] leading-snug text-white/90">{query.data.description}</p>
+          <p className="mt-3 text-[11px] font-bold uppercase tracking-wide text-white/75">
+            Tap to see the full activity →
+          </p>
+        </>
+      )}
+    </button>
+  );
+}
+
+// ticket: integrate playful practice recommendations into parent dashboard
+function RecommendedNextSteps({
+  isReady,
+  categories,
+  queries,
+  onOpen
+}: {
+  isReady: boolean;
+  categories: string[];
+  queries: UseQueryResult<PracticeRecommendation>[];
+  onOpen: (category: string) => void;
+}) {
+  if (!isReady) {
+    return null;
+  }
+
+  if (categories.length === 0) {
+    return (
+      <section className="mt-8">
+        <div className="mb-4 flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-coral" />
+          <h2 className="text-lg font-bold text-slate-900">Recommended Next Steps:</h2>
+        </div>
+        <p className="text-sm text-slate-500">
+          No focus areas detected recently — check back after more reading sessions.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-8">
+      <div className="mb-4 flex items-center gap-2">
+        <Sparkles className="h-5 w-5 text-coral" />
+        <h2 className="text-lg font-bold text-slate-900">Recommended Next Steps:</h2>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {categories.map((category, index) => (
+          <PracticeCard key={category} category={category} query={queries[index]} onOpen={onOpen} />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -192,6 +348,46 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
   const children = useMemo(() => dashboardChildren ?? [], [dashboardChildren]);
   // ticket: wire parent dashboard to /api/reports/[childId] (wpm, accuracy, deficits)
   const reportQuery = useChildReport(activeChildId);
+  const deficits = useMemo(() => reportQuery.data?.deficits ?? [], [reportQuery.data]);
+
+  // ticket: integrate playful practice recommendations into parent dashboard
+  // recommend an activity for each of the top (highest-miscue) focus categories,
+  // capped at 3 to match the "Recommended Next Steps" card row
+  const { focusArea } = useMemo(() => splitDeficitsBySeverity(deficits), [deficits]);
+  const topFocusCategories = useMemo(
+    () => focusArea.slice(0, 3).map((deficit) => deficit.phonicsCategory),
+    [focusArea]
+  );
+  // react query hooks must be called unconditionally, so these are three fixed
+  // slots (disabled automatically by usePracticeRecommendation when null)
+  const practiceQuery0 = usePracticeRecommendation(topFocusCategories[0] ?? null);
+  const practiceQuery1 = usePracticeRecommendation(topFocusCategories[1] ?? null);
+  const practiceQuery2 = usePracticeRecommendation(topFocusCategories[2] ?? null);
+  const practiceQueries = [practiceQuery0, practiceQuery1, practiceQuery2].slice(
+    0,
+    topFocusCategories.length
+  );
+
+  // ticket: integrate playful practice recommendations into parent dashboard
+  // tracks which Recommended Next Steps card is open in the scrollable modal
+  const [openCategory, setOpenCategory] = useState<string | null>(null);
+  const openIndex = openCategory ? topFocusCategories.indexOf(openCategory) : -1;
+  const openActivity = openIndex >= 0 ? practiceQueries[openIndex]?.data : undefined;
+
+  // ticket: implement printable activity card layout (css @media print)
+  const [printingActivity, setPrintingActivity] = useState<PracticeRecommendation | null>(null);
+
+  useEffect(() => {
+    if (!printingActivity) {
+      return;
+    }
+
+    window.print();
+
+    const handleAfterPrint = () => setPrintingActivity(null);
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => window.removeEventListener("afterprint", handleAfterPrint);
+  }, [printingActivity]);
 
   useEffect(() => {
     if (children.length === 0) {
@@ -216,10 +412,26 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
         })) ?? [],
     [activeChild]
   );
+  // ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown
+  // derived straight from recent session totals/duration, so the trend shows up
+  // even before the batch reporting job has produced a generated_reports row
+  const speedChartData = useMemo(
+    () =>
+      activeChild?.recentSessions
+        .slice()
+        .reverse()
+        .map((session) => ({
+          session: formatDate(session.startTime),
+          wcpm: calculateSessionWcpm(session)
+        }))
+        .filter((point): point is { session: string; wcpm: number } => point.wcpm !== null) ?? [],
+    [activeChild]
+  );
 
   return (
     <div className="min-h-screen bg-[#F4F1EA]">
-      <header className="border-b border-slate-200 bg-white">
+      {/* ticket: implement printable activity card layout (css @media print) */}
+      <header className="border-b border-slate-200 bg-white print:hidden">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-1.5 text-lg font-bold text-rose-500">
             <Rocket className="h-5 w-5" />
@@ -246,7 +458,7 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className="mx-auto max-w-6xl px-6 py-8 print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap gap-2 rounded-full bg-slate-100 p-1">
             {PERIOD_OPTIONS.map((option) => (
@@ -328,6 +540,16 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
                 <div className="grid grid-cols-2 gap-4">
                   <StatCard
+                    label="Reading Speed"
+                    value={formatWpm(reportQuery.data?.wcpm ?? null, reportQuery.isLoading)}
+                    note={formatWpmDelta(reportQuery.data?.wcpmDelta ?? null)}
+                  />
+                  <StatCard
+                    label="Accuracy"
+                    value={formatAccuracy(activeChild.metrics.accuracyPct)}
+                    note="Correct words divided by total words"
+                  />
+                  <StatCard
                     label="Sessions"
                     value={activeChild.metrics.sessionCount.toLocaleString()}
                     note={period === "all" ? "All visible sessions" : `In the last ${period.replace("d", " days")}`}
@@ -337,35 +559,65 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
                     value={activeChild.metrics.totalWords.toLocaleString()}
                     note="From reading session totals"
                   />
-                  <StatCard
-                    label="Correct Words"
-                    value={activeChild.metrics.correctWords.toLocaleString()}
-                    note="From reading session totals"
-                  />
-                  <StatCard
-                    label="Accuracy"
-                    value={formatAccuracy(activeChild.metrics.accuracyPct)}
-                    note="Correct words divided by total words"
-                  />
-                  <StatCard
-                    label="Reading Speed"
-                    value={formatWpm(reportQuery.data?.wcpm ?? null, reportQuery.isLoading)}
-                    note={formatWpmDelta(reportQuery.data?.wcpmDelta ?? null)}
-                  />
                 </div>
                 <div className="grid gap-6">
                   <SummaryPanel child={activeChild} />
-                  <DeficitsPanel
-                    isLoading={reportQuery.isLoading}
-                    isError={reportQuery.isError}
-                    deficits={reportQuery.data?.deficits ?? []}
-                  />
                 </div>
               </div>
             </section>
 
+            {/* ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown */}
             <section className="mt-6 rounded-3xl bg-[#FBEBD3] p-6">
               <div className="rounded-2xl bg-[#F5C48A] p-5">
+                <div className="mb-4 flex items-center gap-2">
+                  <Gauge className="h-4 w-4 text-[#5c4322]" />
+                  <h3 className="text-sm font-bold text-slate-900">Reading Speed Over Time</h3>
+                </div>
+                {speedChartData.length > 0 ? (
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={speedChartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.4)" />
+                        <XAxis dataKey="session" tick={{ fontSize: 12, fill: "#5c4322" }} axisLine={false} tickLine={false} />
+                        <YAxis
+                          allowDecimals={false}
+                          tick={{ fontSize: 12, fill: "#5c4322" }}
+                          axisLine={false}
+                          tickLine={false}
+                          label={{ value: "Words per minute", angle: -90, position: "insideLeft", style: { fontSize: 11, fill: "#5c4322" } }}
+                        />
+                        <Tooltip
+                          contentStyle={{ borderRadius: 12, border: "none", fontSize: 12 }}
+                          formatter={(value: unknown) => {
+                            const numValue = typeof value === "number" ? value : 0;
+                            return [`${numValue.toLocaleString()} wcpm`, "Reading speed"];
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="wcpm"
+                          stroke="#ffffff"
+                          strokeWidth={3}
+                          dot={{ r: 5, fill: "#ffffff", stroke: "#E8695E", strokeWidth: 2 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="grid h-64 place-items-center rounded-2xl bg-white/50 p-6 text-center">
+                    <p className="text-sm font-bold leading-6 text-slate-600">
+                      No completed sessions with timing data to chart yet.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown */}
+            {/* kept in the same orange family as the chart above so the page reads as one palette */}
+            <section className="mt-6 rounded-3xl bg-[#FDE7CE] p-6">
+              <div className="rounded-2xl bg-[#F7B979] p-5">
                 <h3 className="mb-4 text-sm font-bold text-slate-900">Words Read by Recent Session</h3>
                 {chartData.length > 0 ? (
                   <div className="h-64 w-full">
@@ -408,12 +660,27 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
               </div>
             </section>
 
+            {/* ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown */}
+            <PhonicsBreakdown
+              isLoading={reportQuery.isLoading}
+              isError={reportQuery.isError}
+              deficits={deficits}
+            />
+
+            {/* ticket: integrate playful practice recommendations into parent dashboard */}
+            <RecommendedNextSteps
+              isReady={!reportQuery.isLoading && !reportQuery.isError}
+              categories={topFocusCategories}
+              queries={practiceQueries}
+              onOpen={setOpenCategory}
+            />
+
             <RecentSessionsList sessions={activeChild.recentSessions} />
           </>
         ) : null}
       </main>
 
-      <footer className="mt-12 border-t border-slate-200 bg-white py-8">
+      <footer className="mt-12 border-t border-slate-200 bg-white py-8 print:hidden">
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 px-6 text-sm text-slate-500 sm:flex-row sm:items-center">
           <div>
             <p className="font-bold text-rose-500">WonderWord AI</p>
@@ -427,6 +694,25 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
           </div>
         </div>
       </footer>
+
+      {/* ticket: integrate playful practice recommendations into parent dashboard */}
+      {openCategory && openActivity ? (
+        <PracticeActivityModal
+          activity={openActivity}
+          childName={activeChild?.name}
+          onClose={() => setOpenCategory(null)}
+          onPrint={() => setPrintingActivity(openActivity)}
+        />
+      ) : null}
+
+      {/* ticket: implement printable activity card layout (css @media print) */}
+      {printingActivity ? (
+        <PrintableActivityCard
+          activity={printingActivity}
+          childName={activeChild?.name}
+          className="hidden print:block"
+        />
+      ) : null}
     </div>
   );
 }
@@ -462,6 +748,24 @@ function formatSessionAccuracy(session: ParentDashboardRecentSession) {
   }
 
   return `${Number(((session.correctWords / session.totalWords) * 100).toFixed(1))}% accuracy`;
+}
+
+// ticket: polish parent dashboard - reading speed trend + phonics deficit breakdown
+// mirrors the wcpm (words correct per minute) terminology already used by the
+// generated report, computed live from a single session's duration
+function calculateSessionWcpm(session: ParentDashboardRecentSession): number | null {
+  if (!session.endTime) {
+    return null;
+  }
+
+  const durationMs = Date.parse(session.endTime) - Date.parse(session.startTime);
+  const durationMinutes = durationMs / 60_000;
+
+  if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+    return null;
+  }
+
+  return Math.round(session.correctWords / durationMinutes);
 }
 
 // ticket: build basic reading session history list for parent dashboard

@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { parseUserRole } from "@/lib/auth/types";
 import { generateStoryWithClaude, mapStoryUpstreamError } from "@/lib/stories/client";
+import { searchUnsplash } from "@/lib/illustrations/unsplash/client";
+import { generateDalleImage } from "@/lib/illustrations/dalle/client";
 import {
   storyGenerationRequestSchema,
   type StoryErrorBody,
@@ -94,15 +96,35 @@ export async function POST(request: NextRequest) {
     console.error("Error retrieving child known words.", error);
   }
 
-  // CLAUDE STORY GENERATION AND PERSISTENCE
+  // CLAUDE STORY GENERATION AND IMAGE RESOLUTION IN PARALLEL
   try {
-    const result = await generateStoryWithClaude({
-      apiKey,
-      word,
-      phonicsCategory,
-      theme,
-      knownWords
-    });
+    const resolveImageTask = async (): Promise<string> => {
+      try {
+        // 1. Unsplash search
+        let imageUrl = await searchUnsplash(word);
+
+        // 2. DALL-E generation fallback
+        if (!imageUrl) {
+          imageUrl = await generateDalleImage(word);
+        }
+
+        return imageUrl || "/images/placeholder.png";
+      } catch (imageError) {
+        console.error("Image resolution pipeline failed, falling back to placeholder.", imageError);
+        return "/images/placeholder.png";
+      }
+    };
+
+    const [storyResult, imageUrl] = await Promise.all([
+      generateStoryWithClaude({
+        apiKey,
+        word,
+        phonicsCategory,
+        theme,
+        knownWords
+      }),
+      resolveImageTask()
+    ]);
 
     // Saves the generated story to the database
     const { data: storyRecord, error: insertError } = await supabase
@@ -110,8 +132,9 @@ export async function POST(request: NextRequest) {
       .insert({
         child_id: childId,
         word,
-        story_text: result.story_text,
-        validation_score: result.validation_score,
+        story_text: storyResult.story_text,
+        image_url: imageUrl,
+        validation_score: storyResult.validation_score,
         phonics_category: phonicsCategory,
         theme: theme || null
       })

@@ -27,7 +27,8 @@ export function LoginForm({ initialError }: LoginFormProps) {
     ...initialLoginState,
     message: initialError ?? null
   };
-  const [state, formAction] = useFormState(signInWithPassword, seededState);
+  const [rawState, formAction] = useFormState(signInWithPassword, seededState);
+  const state = rawState ?? seededState;
 
   return (
     <form action={formAction} className="mt-8 grid gap-5" noValidate>
