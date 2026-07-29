@@ -345,6 +345,8 @@ Runs the 4-layer guardrails check on a Claude-generated story before it is shown
 | 3 | `content_safety` | No banned keywords, positive sentiment | Keyword blocklist + `spaCy` |
 | 4 | `structure` | Contains `[VISUAL]` marker, `word` appears 2–3 times, ends positively | Regex / string checks |
 
+> **2026-07-27 implementation note:** `content_safety` currently uses a keyword blocklist plus a lightweight positive-word heuristic rather than a full spaCy pipeline, to avoid adding a large model dependency for a short, tightly-scoped children's story. The check is isolated in `check_content_safety()` in `routers/validate_story.py`, so swapping in real spaCy sentiment/NER analysis later is a contained change if the team wants it.
+
 **Error responses:**
 ```json
 // 400
@@ -373,12 +375,23 @@ Returns a Playful Practice offline activity for a detected phonics deficit.
 **Response `200 OK`:**
 ```json
 {
-  "title": "Silly Shadow Puppets",
+  "title": "Shadow Puppets SH Game",
   "description": "Turn off the lights and use a flashlight. As shadow animals appear, the child shouts SH words (e.g. Shark, Sheep, Shadow) to make them move.",
   "pedagogy": "Connects kinetic motor controls with vocal phonetic blending to reinforce pronunciation patterns.",
-  "phonics_category": "sh-digraph"
+  "phonics_category": "sh-digraph",
+  "duration_minutes": 10,
+  "materials": [
+    { "icon": "lamp", "label": "Lamp or torch" },
+    { "icon": "wall", "label": "A plain white wall" }
+  ],
+  "example_words": ["ship", "shell", "shout", "fish", "wish"],
+  "steps": [
+    { "title": "Set the scene", "description": "Darken the room and shine a lamp at a plain white wall." }
+  ]
 }
 ```
+
+> **2026-07-27 update:** Added `duration_minutes`, `materials`, `example_words`, and `steps` to support the parent-dashboard activity detail modal. These are additive (existing consumers reading only `title`/`description`/`pedagogy`/`phonics_category` are unaffected). See `supabase/migrations/20260727130000_add_activity_recommendation_details.sql`.
 
 **Response `200 OK` — unknown category (fallback):**
 ```json
@@ -386,7 +399,11 @@ Returns a Playful Practice offline activity for a detected phonics deficit.
   "title": "Word Detective",
   "description": "Look around the house and find objects whose names start with the tricky sound. Say each one out loud three times!",
   "pedagogy": "Environmental word-finding reinforces phoneme-grapheme connections through real-world context.",
-  "phonics_category": "unknown"
+  "phonics_category": "unknown",
+  "duration_minutes": 10,
+  "materials": [{ "icon": "eye", "label": "Your eyes and ears" }],
+  "example_words": [],
+  "steps": [{ "title": "Pick a room", "description": "Choose any room in the house to explore together." }]
 }
 ```
 
