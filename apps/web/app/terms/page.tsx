@@ -1,13 +1,5 @@
 import { ShieldCheck, CheckCircle2, Circle, Mail } from "lucide-react";
 
-// -----------------------------------------------------------------------------
-// WonderWord AI — Terms of Service page
-// Next.js App Router page component (app/terms/page.tsx)
-// Tailwind CSS. Drop lucide-react icons in (npm i lucide-react) if not present.
-//
-// LOGO: uses /public/logo.svg — same file used on the Privacy Policy page.
-// -----------------------------------------------------------------------------
-
 const NAV_ITEMS = [
   { id: "acceptance", label: "Acceptance" },
   { id: "use-of-service", label: "Use of Service" },
@@ -20,7 +12,7 @@ const NAV_ITEMS = [
 
 export default function TermsOfServicePage() {
   return (
-    <div className="min-h-screen bg-[#FFFFFF] text-[#2b2b2b]">
+    <div className="min-h-screen bg-[#FDFAF5] text-[#2b2b2b]">
       {/* ---------------------------------------------------------------- */}
       {/* Header                                                          */}
       {/* ---------------------------------------------------------------- */}
@@ -29,7 +21,7 @@ export default function TermsOfServicePage() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt="WonderWord AI" className="h-8 w-auto" />
 
-          <nav className="hidden gap-8 text-sm font-medium text-[#4a4a4a] md:flex">
+          <nav className="absolute left-1/2 hidden -translate-x-1/2 gap-8 text-sm font-medium text-[#4a4a4a] md:flex">
             <a href="#" className="hover:text-[#2b2b2b]">
               Home
             </a>
@@ -61,12 +53,22 @@ export default function TermsOfServicePage() {
         {/* -------------------------------------------------------------- */}
         {/* Title                                                         */}
         {/* -------------------------------------------------------------- */}
-        <div>
+        <div className="text-center">
+          <h1 className="font-serif text-4xl font-bold text-[#a3352b] md:text-5xl">
+            Terms of Service
+          </h1>
           <p className="mt-2 text-sm text-[#8a8a8a]">
-          <h1 className="font-serif text-4xl font-bold text-[#a3352b] md:text-5xl">Terms of Service</h1> 
             Last updated: October 24, 2024
           </p>
         </div>
+
+        {/* <div className="text-center">
+          <h1 className="font-serif text-4xl font-bold text-[#a3352b] md:text-5xl">
+            Privacy Policy
+          </h1>
+          <p className="mt-3 text-xs font-semibold tracking-wider text-[#8a8a8a]">
+            LAST UPDATED: JUNE 24, 2024
+          </p> */}
 
         <div className="mt-10 flex flex-col gap-12 md:flex-row">
           {/* -------------------------------------------------------------- */}
@@ -93,7 +95,7 @@ export default function TermsOfServicePage() {
           {/* -------------------------------------------------------------- */}
           {/* Content                                                       */}
           {/* -------------------------------------------------------------- */}
-          <div className="min-w-0 flex-1 space-y-14">
+          <div className="min-w-0 max-w-5xl flex-1 space-y-14">
             {/* Acceptance of Terms */}
             <section id="acceptance">
               <h2 className="text-2xl font-bold">Acceptance of Terms</h2>
@@ -137,15 +139,15 @@ export default function TermsOfServicePage() {
                   <h3 className="font-bold text-[#a3352b]">For Children</h3>
                   <ul className="mt-3 space-y-2 text-sm text-[#5a3d3a]">
                     <li className="flex items-start gap-2">
-                      <Circle className="mt-0.5 h-4 w-4 shrink-0 text-[#a3352b]" />
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#a3352b]" />
                       Play and learn safely
                     </li>
                     <li className="flex items-start gap-2">
-                      <Circle className="mt-0.5 h-4 w-4 shrink-0 text-[#a3352b]" />
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#a3352b]" />
                       Respect other users
                     </li>
                     <li className="flex items-start gap-2">
-                      <Circle className="mt-0.5 h-4 w-4 shrink-0 text-[#a3352b]" />
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#a3352b]" />
                       Follow writing prompts
                     </li>
                   </ul>
@@ -156,7 +158,7 @@ export default function TermsOfServicePage() {
             {/* Children's Privacy (COPPA) */}
             <section
               id="childrens-privacy"
-              className="relative overflow-hidden rounded-2xl border border-[#e8c84a] bg-[#fdf3d8] p-7"
+              className="relative max-w-5xl overflow-hidden rounded-2xl border border-[#e8c84a] bg-[#fdf3d8] p-7"
             >
               <svg
                 aria-hidden
@@ -244,7 +246,7 @@ export default function TermsOfServicePage() {
             {/* Questions / CTA */}
             <section
               id="contact"
-              className="flex flex-col items-start justify-between gap-6 rounded-2xl bg-[#df7856] p-8 text-white sm:flex-row sm:items-center"
+              className="flex max-w-5xl flex-col items-start justify-between gap-6 rounded-2xl bg-[#df7856] p-8 text-white sm:flex-row sm:items-center"
             >
               <div>
                 <h2 className="text-2xl font-bold">Questions?</h2>
@@ -268,8 +270,10 @@ export default function TermsOfServicePage() {
       <footer className="border-t border-[#f0e6d8] bg-white py-8">
         <div className="mx-auto flex max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] flex-col items-center justify-between gap-4 px-6 text-sm text-[#8a8a8a] md:flex-row">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.svg" alt="WonderWord AI" className="h-6 w-auto opacity-80" />
-          <p>© 2024 WonderWord AI.</p>
+          <div>
+            <img src="/logo.svg" alt="WonderWord AI" className="h-6 w-auto opacity-80" />
+          <p className="ml-1">© 2024 WonderWord AI.</p>
+          </div>
           <div className="flex gap-5">
             <a href="#" className="hover:text-[#2b2b2b]">
               Privacy

@@ -20,17 +20,6 @@ import {
   SiVercel,
 } from "@icons-pack/react-simple-icons";
 
-// -----------------------------------------------------------------------------
-// WonderWord AI — Privacy Policy page
-// Next.js App Router page component (app/privacy/page.tsx)
-// Tailwind CSS. Drop lucide-react icons in (npm i lucide-react) if not present.
-//
-// LOGO: drop logo.svg at /public/logo.svg (the file you uploaded). It's an
-// SVG wrapping a raster image, so we use a plain <img> tag below instead of
-// next/image — next/image needs `images.dangerouslyAllowSVG: true` in
-// next.config.js to render SVGs, and isn't worth it for a static logo like this.
-// -----------------------------------------------------------------------------
-
 const partners = [
   { name: "Supabase", Icon: SiSupabase, color: "#3ECF8E" },
   { name: "Sentry", Icon: SiSentry, color: "#362D59" },
@@ -40,7 +29,7 @@ const partners = [
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="min-h-screen bg-[#FFFFFF] text-[#2b2b2b]">
+    <div className="min-h-screen bg-[#FDFAF5] text-[#2b2b2b]">
       {/* ---------------------------------------------------------------- */}
       {/* Header                                                          */}
       {/* ---------------------------------------------------------------- */}
@@ -49,7 +38,7 @@ export default function PrivacyPolicyPage() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt="WonderWord AI" className="h-8 w-auto" />
 
-          <nav className="hidden gap-8 text-sm font-medium text-[#4a4a4a] md:flex">
+          <nav className="absolute left-1/2 hidden -translate-x-1/2 gap-8 text-sm font-medium text-[#4a4a4a] md:flex">
             <a href="#" className="hover:text-[#2b2b2b]">
               Home
             </a>
@@ -135,7 +124,7 @@ export default function PrivacyPolicyPage() {
           {/* -------------------------------------------------------------- */}
           {/* Content column — capped width for readability                */}
           {/* -------------------------------------------------------------- */}
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 max-w-5xl flex-1">
         {/* Note to parents                                               */}
         {/* -------------------------------------------------------------- */}
         <section id="note" className="relative mt-10 overflow-hidden rounded-2xl border border-[#f0e6d8] bg-white p-8 shadow-[0_8px_30px_rgba(163,53,43,0.06)]">
@@ -384,7 +373,7 @@ export default function PrivacyPolicyPage() {
       <footer className="border-t border-[#f0e6d8] bg-white py-8">
         <div className="mx-auto flex max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] flex-col items-center justify-between gap-4 px-6 text-sm text-[#8a8a8a] md:flex-row">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <div className="px-6">
+          <div>
             <img src="/logo.svg" alt="WonderWord AI" className="h-6 w-auto opacity-80" />
             <p className="ml-1">© 2026 WonderWord AI.</p>
           </div>
