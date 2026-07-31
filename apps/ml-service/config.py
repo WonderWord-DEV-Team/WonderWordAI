@@ -22,6 +22,7 @@ _load_env_file()
 MODEL_NAME = os.getenv("MODEL_NAME", "small")
 DEVICE = os.getenv("DEVICE", "cpu")
 ML_SERVICE_KEY = os.getenv("ML_SERVICE_KEY")
+SENTRY_DSN = os.getenv("SENTRY_DSN")
 HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
 CONFIDENCE_THRESHOLD = 0.85
 TTS_PROVIDER = os.getenv("TTS_PROVIDER")
