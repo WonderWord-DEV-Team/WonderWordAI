@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, ReactNode } from "react";
+import type { SessionAudioData } from "@/lib/audio/schema";
 
 type Correction = {
   word: string;
@@ -32,6 +33,8 @@ type ChildSessionState = {
   worksheetText: string | null;
   imageKeywords: string[];
   worksheetStatus: WorksheetUploadStatus;
+  latestTranscription: SessionAudioData | null;
+  setLatestTranscription: (result: SessionAudioData | null) => void;
   setWorksheetStatus: (status: WorksheetUploadStatus) => void;
   setOcrResult: (result: OcrResult) => void;
   clearOcrResult: () => void;
@@ -52,6 +55,7 @@ export function ChildSessionProvider({
   const [worksheetText, setWorksheetText] = useState<string | null>(null);
   const [imageKeywords, setImageKeywords] = useState<string[]>([]);
   const [worksheetStatus, setWorksheetStatus] = useState<WorksheetUploadStatus>("idle");
+  const [latestTranscription, setLatestTranscription] = useState<SessionAudioData | null>(null);
 
   const addCorrection = (correction: Correction) => {
     setCorrections((prev) => [...prev, correction]);
@@ -63,6 +67,7 @@ export function ChildSessionProvider({
     setImageKeywords(result.imageKeywords);
     setWorksheetStatus("ocr_complete");
     setActiveWordIndex(0);
+    setLatestTranscription(null);
   };
 
   const clearOcrResult = () => {
@@ -70,6 +75,7 @@ export function ChildSessionProvider({
     setImageKeywords([]);
     setWorksheetStatus("idle");
     setActiveWordIndex(0);
+    setLatestTranscription(null);
   };
 
   return (
@@ -84,6 +90,8 @@ export function ChildSessionProvider({
         worksheetText,
         imageKeywords,
         worksheetStatus,
+        latestTranscription,
+        setLatestTranscription,
         setWorksheetStatus,
         setOcrResult,
         clearOcrResult
