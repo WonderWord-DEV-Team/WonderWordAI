@@ -11,3 +11,6 @@ imageio-ffmpeg
 editdistance
 supabase
 anthropic
+textstat
+spacy
+sentry-sdk

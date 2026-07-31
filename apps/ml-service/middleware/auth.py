@@ -4,15 +4,35 @@ from starlette.responses import JSONResponse
 from config import ML_SERVICE_KEY
 
 
+PROTECTED_PATHS = {
+    "/transcribe",
+    "/detect-miscue",
+    "/activity-recommendation",
+    "/narrate",
+    "/validate-story",
+}
+
+
+def _unauthorized_response():
+    return JSONResponse(
+        status_code=401,
+        content={"detail": "Missing or invalid X-Internal-Key"},
+    )
+
+
+async def _authenticate(request, call_next):
+    if request.url.path in PROTECTED_PATHS:
+        internal_key = request.headers.get("X-Internal-Key")
+        if not ML_SERVICE_KEY or internal_key != ML_SERVICE_KEY:
+            return _unauthorized_response()
+    return await call_next(request)
+
+
 class InternalKeyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
-        if request.url.path in {"/transcribe", "/detect-miscue", "/activity-recommendation", "/narrate"}:
-            internal_key = request.headers.get("X-Internal-Key")
+        return await _authenticate(request, call_next)
 
-            if not ML_SERVICE_KEY or internal_key != ML_SERVICE_KEY:
-                return JSONResponse(
-                    status_code=401,
-                    content={"detail": "Missing or invalid X-Internal-Key"},
-                )
 
-        return await call_next(request)
+async def internal_key_middleware(request, call_next):
+    """Function-style compatibility for apps using @app.middleware."""
+    return await _authenticate(request, call_next)
