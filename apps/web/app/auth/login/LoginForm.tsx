@@ -4,6 +4,8 @@ import { useFormState, useFormStatus } from "react-dom";
 import { signInWithPassword } from "@/app/auth/actions";
 import { initialLoginState, type LoginActionState } from "@/app/auth/login/state";
 import { PasswordInput } from "@/components/auth/PasswordInput";
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type LoginFormProps = {
   initialError?: string;
@@ -31,6 +33,28 @@ export function LoginForm({ initialError }: LoginFormProps) {
   const [rawState, formAction] = useFormState(signInWithPassword, seededState);
   const state = rawState ?? seededState;
 
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setGoogleLoading(true);
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) {
+        console.error("Google sign in error:", error);
+        setGoogleLoading(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <>
       <p className="text-center text-red-500 font-black text-xl">WonderWord AI</p>
@@ -41,11 +65,11 @@ export function LoginForm({ initialError }: LoginFormProps) {
 
       <button
         type="button"
-        disabled
-        title="Coming soon"
-        className="mt-6 w-full min-h-12 rounded-xl border border-gray-200 text-sm font-bold text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed"
+        disabled={googleLoading}
+        onClick={handleGoogleSignIn}
+        className="mt-6 w-full min-h-12 rounded-xl border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        Continue with Google
+        {googleLoading ? "Connecting to Google..." : "Continue with Google"}
       </button>
 
       <div className="my-5 flex items-center gap-3">
