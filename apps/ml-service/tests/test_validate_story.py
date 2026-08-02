@@ -62,7 +62,7 @@ def test_valid_story_passes_all_guardrails(monkeypatch):
     assert data["guardrails"]["vocabulary"] == "passed"
 
 
-def test_story_fails_vocabulary_check_and_logs_to_sentry(monkeypatch):
+def test_unrecognized_vocabulary_warns_without_rejecting_story(monkeypatch):
     client = _client(monkeypatch)
 
     # Fake Sentry so we can assert it was called without needing a real DSN
@@ -93,13 +93,34 @@ def test_story_fails_vocabulary_check_and_logs_to_sentry(monkeypatch):
     assert response.status_code == 200
     data = response.json()
 
-    assert data["is_valid"] is False
-    assert data["guardrails"]["vocabulary"] == "failed"
-    assert any("vocabulary" in e for e in data["errors"])
+    assert data["is_valid"] is True
+    assert data["guardrails"]["vocabulary"] == "warning"
+    assert data["errors"] == []
+    assert any("enormous" in warning for warning in data["warnings"])
     assert data["validation_score"] < 100
 
-    # Sentry should have been notified of the failure
-    fake_sentry.capture_message.assert_called_once()
+    # Advisory vocabulary findings should not be logged as validation failures.
+    fake_sentry.capture_message.assert_not_called()
+
+
+def test_common_words_and_inflected_known_words_do_not_warn(monkeypatch):
+    client = _client(monkeypatch)
+    response = client.post(
+        "/validate-story",
+        headers={"X-Internal-Key": "test-key"},
+        json={
+            "story_text": "The fox hopped with Sam. [VISUAL] The fox hopped with Sam and smiled.",
+            "child_id": "child_abc123",
+            "word": "fox",
+            "known_words": ["hop", "Sam", "smile"],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_valid"] is True
+    assert data["guardrails"]["vocabulary"] == "passed"
+    assert data["warnings"] == []
 
 
 def test_known_words_fetched_from_supabase_when_omitted(monkeypatch):

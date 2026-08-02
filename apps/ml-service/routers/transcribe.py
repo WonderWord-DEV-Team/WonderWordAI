@@ -35,8 +35,8 @@ def _reference_miscues(reference_text: str, recognized_words: list[str]) -> list
             actual_word = replacement_words[offset] if offset < len(replacement_words) else ""
             miscues.append({
                 "word": expected_word,
-                "expected_phonemes": expected_word,
-                "actual_phonemes": actual_word,
+                "expected_word": expected_word,
+                "actual_word": actual_word,
                 "is_correct": False,
             })
 
@@ -105,8 +105,9 @@ async def transcribe(
                 if score < CONFIDENCE_THRESHOLD:
                     miscues.append({
                         "word": word,
-                        "expected_phonemes": "",
-                        "actual_phonemes": "",
+                        "expected_word": "",
+                        "actual_word": word,
+                        "is_correct": False,
                     })                      
 
         if reference_text and reference_text.strip():

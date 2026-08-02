@@ -93,8 +93,8 @@ def test_transcribe_returns_expected_word_for_reference_miscue(mock_transcribe, 
     assert response.json()["miscues"] == [
         {
             "word": "play",
-            "expected_phonemes": "play",
-            "actual_phonemes": "please",
+            "expected_word": "play",
+            "actual_word": "please",
             "is_correct": False,
         }
     ]

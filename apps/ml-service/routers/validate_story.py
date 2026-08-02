@@ -8,7 +8,7 @@ from services.supabase_service import get_supabase_client
 
 try:
     import sentry_sdk
-except ImportError:  # pragma: no cover - sentry-sdk should be in requirements.txt
+except ImportError:  # pragma: no cover - sentry-sdk should be installed in production
     sentry_sdk = None
 
 router = APIRouter()
@@ -27,7 +27,6 @@ async def validate_story_endpoint(
     x_internal_key: Annotated[str | None, Header(alias="X-Internal-Key")] = None,
 ):
     _ = x_internal_key  # enforced centrally by InternalKeyMiddleware
-
     known_words = request.known_words
     if known_words is None:
         known_words = await _fetch_known_words(request.child_id)
@@ -45,6 +44,7 @@ async def validate_story_endpoint(
         "is_valid": result.is_valid,
         "validation_score": result.validation_score,
         "errors": result.errors,
+        "warnings": result.warnings,
         "guardrails": result.guardrails,
     }
 
