@@ -93,6 +93,8 @@ The refresh uses these source columns:
 
 It ignores OCR text, transcripts that were not persisted as reading events, parent reports, generated activities, fallback words, and phonics-category aggregates.
 
+Application producers must persist `reading_events` from explicit scored/evaluated reading attempts. The ML `miscues` response is reserved for actual reading errors shown back to the child and must not be treated as the source of correct attempts for mastery.
+
 ### Normalization
 
 `public.normalize_reading_word(input_text text)` normalizes a single persisted word token by trimming whitespace, lowercasing, normalizing Unicode apostrophes and dashes, removing surrounding punctuation, and preserving meaningful internal apostrophes and hyphens.

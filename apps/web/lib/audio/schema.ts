@@ -43,6 +43,18 @@ export const mlTranscribeMiscueSchema = z
   })
   .strict();
 
+export const mlTranscribeReadingEventSchema = z
+  .object({
+    word: z.string().trim().min(1),
+    expected_phonemes: z.string().trim().min(1),
+    actual_phonemes: z.string().trim().min(1),
+    phonics_category: z.string().trim().min(1),
+    similarity_score: z.number().finite().min(0).max(1).optional(),
+    confidence: z.number().finite().min(0).max(1).optional(),
+    is_correct: z.boolean()
+  })
+  .strict();
+
 export const mlTranscribeSegmentSchema = z
   .object({
     text: z.string(),
@@ -69,6 +81,7 @@ export const mlTranscribeResultSchema = z
     words: z.array(z.string().trim().min(1)),
     timestamps: z.array(finiteTimestampSchema),
     miscues: z.array(mlTranscribeMiscueSchema),
+    reading_events: z.array(mlTranscribeReadingEventSchema).default([]),
     transcript: z.string().optional(),
     segments: z.array(mlTranscribeSegmentSchema).optional()
   })
@@ -114,6 +127,7 @@ export const mlTranscribeResultSchema = z
 
 export type MlTranscribeResult = z.infer<typeof mlTranscribeResultSchema>;
 export type MlTranscribeMiscue = z.infer<typeof mlTranscribeMiscueSchema>;
+export type MlTranscribeReadingEvent = z.infer<typeof mlTranscribeReadingEventSchema>;
 
 export const sessionAudioWordSchema = z
   .object({
@@ -204,28 +218,28 @@ export function mapMlTranscriptionToSessionAudio({
 export function getPersistableReadingEvents({
   sessionId,
   childId,
-  miscues
+  readingEvents
 }: {
   sessionId: string;
   childId: string;
-  miscues: MlTranscribeMiscue[];
+  readingEvents: MlTranscribeReadingEvent[];
 }) {
-  return miscues
+  return readingEvents
     .filter(
-      (miscue) =>
-        Boolean(miscue.word.trim()) &&
-        Boolean(miscue.expected_phonemes.trim()) &&
-        Boolean(miscue.actual_phonemes.trim()) &&
-        Boolean(miscue.phonics_category?.trim())
+      (event) =>
+        Boolean(event.word.trim()) &&
+        Boolean(event.expected_phonemes.trim()) &&
+        Boolean(event.actual_phonemes.trim()) &&
+        Boolean(event.phonics_category.trim())
     )
-    .map((miscue) => ({
+    .map((event) => ({
       session_id: sessionId,
       child_id: childId,
-      word: miscue.word.trim(),
-      expected_phonemes: miscue.expected_phonemes.trim(),
-      actual_phonemes: miscue.actual_phonemes.trim(),
-      phonics_category: miscue.phonics_category?.trim() ?? "",
-      similarity_score: miscue.similarity_score ?? miscue.confidence ?? null,
-      is_correct: miscue.is_correct ?? false
+      word: event.word.trim(),
+      expected_phonemes: event.expected_phonemes.trim(),
+      actual_phonemes: event.actual_phonemes.trim(),
+      phonics_category: event.phonics_category.trim(),
+      similarity_score: event.similarity_score ?? event.confidence ?? null,
+      is_correct: event.is_correct
     }));
 }

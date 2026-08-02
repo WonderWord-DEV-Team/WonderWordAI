@@ -8,6 +8,18 @@ export const transcribeMiscueSchema = z
     })
     .strict();
 
+export const transcribeReadingEventSchema = z
+    .object({
+        word: z.string(),
+        expected_phonemes: z.string(),
+        actual_phonemes: z.string(),
+        phonics_category: z.string(),
+        similarity_score: z.number().optional(),
+        confidence: z.number().optional(),
+        is_correct: z.boolean(),
+    })
+    .strict();
+
 export const transcribeSegmentSchema = z
     .object({
         text: z.string(),
@@ -21,6 +33,7 @@ export const transcribeResultSchema = z
         words: z.array(z.string()),
         timestamps: z.array(z.number()),
         miscues: z.array(transcribeMiscueSchema),
+        reading_events: z.array(transcribeReadingEventSchema).default([]),
         transcript: z.string().optional(),
         segments: z.array(transcribeSegmentSchema).optional()
     })
@@ -35,4 +48,3 @@ export type AllowedAudioType = (typeof ALLOWED_AUDIO_TYPES)[number];
 export function isAllowedAudioType(type: string): type is AllowedAudioType {
         return ALLOWED_AUDIO_TYPES.includes(type as AllowedAudioType);
 }
-
