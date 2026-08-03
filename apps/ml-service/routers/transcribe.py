@@ -3,7 +3,7 @@ import tempfile
 
 from typing import Annotated
 
-from fastapi import APIRouter, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
 from starlette.concurrency import run_in_threadpool
 
 from config import CONFIDENCE_THRESHOLD
@@ -16,9 +16,11 @@ router = APIRouter()
 @router.post("/transcribe")
 async def transcribe(
     audio: UploadFile = File(...),
+    reference_text: Annotated[str | None, Form()] = None,
     x_internal_key: Annotated[str | None, Header(alias="X-Internal-Key")] = None,
 ):
     _ = x_internal_key
+    _ = reference_text
     suffix = os.path.splitext(audio.filename or "")[1]
     temp_path = None
 
@@ -77,6 +79,7 @@ async def transcribe(
             "transcript": " ".join(segment["text"] for segment in segments),
             "segments": segments,
             "miscues": miscues,
+            "reading_events": [],
         }
     finally:
         if temp_path and os.path.exists(temp_path):

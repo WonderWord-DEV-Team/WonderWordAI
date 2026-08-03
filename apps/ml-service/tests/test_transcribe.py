@@ -61,3 +61,5 @@ def test_transcribe(mock_transcribe, monkeypatch):
 
     assert "words" in data
     assert "timestamps" in data
+    assert data["miscues"] == []
+    assert data["reading_events"] == []
