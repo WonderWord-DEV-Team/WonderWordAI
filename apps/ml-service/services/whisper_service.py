@@ -94,7 +94,9 @@ def transcribe_audio(audio_path: str):
     import whisperx
 
     whisper_model = load_whisper_model()
-    result = whisper_model.transcribe(audio_path)
+    # Reading sessions are English. Skipping uncertain language detection also
+    # improves recognition of very short recordings and single words.
+    result = whisper_model.transcribe(audio_path, language="en")
 
     if not result.get("segments"):
         return result

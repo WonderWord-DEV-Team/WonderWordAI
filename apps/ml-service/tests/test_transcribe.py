@@ -63,3 +63,40 @@ def test_transcribe(mock_transcribe, monkeypatch):
     assert "timestamps" in data
     assert data["miscues"] == []
     assert data["reading_events"] == []
+
+
+@patch("routers.transcribe.transcribe_audio")
+def test_transcribe_returns_expected_word_for_reference_miscue(mock_transcribe, monkeypatch):
+    monkeypatch.setattr(auth_middleware, "ML_SERVICE_KEY", "test-key")
+    app = FastAPI()
+    app.add_middleware(InternalKeyMiddleware)
+    app.include_router(router)
+    client = TestClient(app)
+    mock_transcribe.return_value = {
+        "segments": [
+            {
+                "text": "please now",
+                "words": [
+                    {"word": "please", "start": 0.0, "score": 0.95},
+                    {"word": "now", "start": 0.5, "score": 0.95},
+                ],
+            }
+        ]
+    }
+
+    response = client.post(
+        "/transcribe",
+        headers={"X-Internal-Key": "test-key"},
+        data={"reference_text": "play now"},
+        files={"audio": ("sample.wav", BytesIO(b"RIFF....WAVEfmt "), "audio/wav")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["miscues"] == [
+        {
+            "word": "play",
+            "expected_word": "play",
+            "actual_word": "please",
+            "is_correct": False,
+        }
+    ]
