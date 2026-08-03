@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { useChildSession } from "@/components/child/ChildSessionContext";
 import { KaraokeText } from "@/components/child/KaraokeText";
@@ -12,9 +12,10 @@ import { PageContainer } from "@/components/shared/PageContainer";
 import { PlaceholderCard } from "@/components/shared/PlaceholderCard";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { WorksheetCapture } from "@/components/worksheet/WorksheetCapture";
-import { useCreateSession } from "@/hooks/useSessions";
+import { useCreateSession, useOpenSessions } from "@/hooks/useSessions";
 import type { AuthContext } from "@/lib/auth/types";
 import { normalizeKaraokeWord, type KaraokeTimeline } from "@/lib/karaoke/timeline";
+import { useGenerateStory } from "@/hooks/useGenerateStory";
 
 type ChildReadingShellProps = {
   auth: AuthContext;
@@ -35,6 +36,8 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
   const {
     sessionId,
     setSessionId,
+    childId,
+    setChildId,
     worksheetText,
     imageKeywords,
     worksheetStatus,
@@ -45,6 +48,15 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
     setOcrResult,
     clearOcrResult
   } = useChildSession();
+  const { data: openSessions } = useOpenSessions();
+  const {
+    mutate: generateStory,
+    data: storyResult,
+    isPending: isGeneratingStory,
+    isError: isStoryError,
+    reset: resetStoryMutation
+  } = useGenerateStory();
+  const generatedForTextRef = useRef<string | null>(null);
   const sessionRequestRef = useRef<Promise<string> | null>(null);
   const { mutateAsync: createSession } = useCreateSession();
   const isDemoSession = sessionId === "demo-session";
@@ -74,6 +86,7 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
     sessionRequestRef.current = createSession()
       .then((session) => {
         setSessionId(session.id);
+        setChildId(session.childId);
         return session.id;
       })
       .finally(() => {
@@ -81,7 +94,30 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
       });
 
     return sessionRequestRef.current;
-  }, [createSession, sessionId, setSessionId]);
+  }, [createSession, sessionId, setSessionId, setChildId]);
+
+  useEffect(() => {
+    if (childId) return;
+    if (!uuidPattern.test(sessionId)) return;
+
+    const match = openSessions?.find((session) => session.id === sessionId);
+    if (match) {
+      setChildId(match.childId);
+    }
+  }, [childId, sessionId, openSessions, setChildId]);
+
+  useEffect(() => {
+    if (!childId) return;
+    if (worksheetStatus !== "ocr_complete") return;
+    if (imageKeywords.length === 0) return;
+    if (generatedForTextRef.current === worksheetText) return;
+
+    generatedForTextRef.current = worksheetText;
+    generateStory({
+      childId,
+      word: imageKeywords[0]
+    });
+  }, [childId, worksheetStatus, imageKeywords, worksheetText, generateStory]);
 
   return (
     <main className="bg-[linear-gradient(180deg,rgb(255_249_241),rgb(255_240_226))]">
@@ -154,7 +190,20 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
                 className="min-h-[22rem] reading-ruler"
               >
                 {activeTab === "story" ? (
-                  <StoryTab />
+                  <>
+                    <StoryTab
+                      storyText={storyResult?.story_text ?? null}
+                      imageUrl={storyResult?.image_url ?? null}
+                      imageStatus={
+                        isGeneratingStory ? "loading" : isStoryError ? "error" : storyResult?.image_url ? "ready" : "empty"
+                      }
+                    />
+                    {isStoryError ? (
+                      <p className="mt-2 text-sm font-bold text-coral">
+                        Story generation failed — try rescanning the worksheet.
+                      </p>
+                    ) : null}
+                  </>
                 ) : worksheetText ? (
                   <div className="rounded-[var(--radius-card)] bg-white/88 p-5">
                     <KaraokeText
@@ -190,6 +239,8 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
                         });
                         setLatestTranscription(null);
                         clearOcrResult();
+                        generatedForTextRef.current = null;
+                        resetStoryMutation();
                       }}
                       className="mt-6 min-h-12 rounded-[var(--radius-card)] border border-coral/30 px-4 py-3 text-sm font-black text-coral transition hover:bg-coral/10"
                     >

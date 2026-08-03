@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { childId, word, phonicsCategory, theme } = parsedRequest.data;
+  const { childId, word, phonicsCategory: requestedPhonicsCategory, theme } = parsedRequest.data;
 
   // USER AUTHENTICATION
   const supabase = createClient();
@@ -108,6 +108,8 @@ export async function POST(request: NextRequest) {
   // match here as extra context for Claude. A failure here should never block
   // story generation, so it's isolated in its own try/catch.
   let phonicsGrounding: { ruleExplanation: string; examples: string[] } | null = null;
+
+  let resolvedPhonicsCategory = requestedPhonicsCategory ?? null;
   try {
     const phonicsResult = await lookupPhonicsRule({ stuckWord: word });
     const topMatch = phonicsResult.matches[0];
@@ -116,12 +118,15 @@ export async function POST(request: NextRequest) {
         ruleExplanation: topMatch.phonics_rule,
         examples: topMatch.example_words
       };
+      resolvedPhonicsCategory ??= topMatch.category;
     }
   } catch (error) {
     if (!(error instanceof PhonicsUpstreamError && error.code === "no_rule_found")) {
       console.warn("Phonics grounding lookup failed; continuing without it.", error);
     }
   }
+
+  const phonicsCategory = resolvedPhonicsCategory ?? "unknown";
 
   // IMAGE RESOLUTION starts immediately and runs in the background alongside
   // the generate+validate loop below, since it only depends on `word`.
@@ -196,6 +201,7 @@ export async function POST(request: NextRequest) {
 
     if (!finalStoryText || !lastValidation?.is_valid) {
       const issues = lastValidation?.errors.length ? ` Last issues: ${lastValidation.errors.join("; ")}` : "";
+      console.log("Final validation state:", lastValidation);
       return errorResponse(
         "story_validation_failed",
         `We could not generate a story that passed all safety and reading-level checks after ${MAX_GENERATION_ATTEMPTS} attempts.${issues}`,

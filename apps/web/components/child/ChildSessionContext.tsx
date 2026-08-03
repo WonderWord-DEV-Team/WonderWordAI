@@ -24,6 +24,8 @@ type OcrResult = {
 };
 
 type ChildSessionState = {
+  childId: string | null;
+  setChildId: (childId: string) => void;
   sessionId: string;
   setSessionId: (sessionId: string) => void;
   activeWordIndex: number;
@@ -49,6 +51,7 @@ export function ChildSessionProvider({
   sessionId: string;
   children: ReactNode;
 }) {
+  const [childId, setChildId] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState(sessionId);
   const [activeWordIndex, setActiveWordIndex] = useState(0);
   const [corrections, setCorrections] = useState<Correction[]>([]);
@@ -81,6 +84,8 @@ export function ChildSessionProvider({
   return (
     <ChildSessionContext.Provider
       value={{
+        childId,
+        setChildId,
         sessionId: activeSessionId,
         setSessionId: setActiveSessionId,
         activeWordIndex,

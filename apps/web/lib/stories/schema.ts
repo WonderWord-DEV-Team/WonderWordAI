@@ -22,7 +22,7 @@ export type StoryErrorBody = {
 export const storyGenerationRequestSchema = z.object({
   childId: z.string().uuid("childId must be a valid UUID"),
   word: z.string().min(1, "word is required"),
-  phonicsCategory: z.string().min(1, "phonicsCategory is required"),
+  phonicsCategory: z.string().min(1).optional(),
   theme: z.string().optional()
 });
 
@@ -78,3 +78,16 @@ export function parseStoryModelResponse(rawOutput: string) {
   };
 }
 
+export const validateStoryResponseSchema = z.object({
+  is_valid: z.boolean(),
+  validation_score: z.number().int().min(0).max(100),
+  errors: z.array(z.string()),
+  guardrails: z.object({
+    vocabulary: z.enum(["passed", "failed"]),
+    complexity: z.enum(["passed", "failed"]),
+    content_safety: z.enum(["passed", "failed"]),
+    structure: z.enum(["passed", "failed"])
+  })
+});
+
+export type ValidateStoryResponse = z.infer<typeof validateStoryResponseSchema>;

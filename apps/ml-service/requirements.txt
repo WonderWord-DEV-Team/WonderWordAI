@@ -5,7 +5,7 @@ torch
 transformers
 phonemizer
 numpy
-sentence-transformers
+sentence-transformers==3.3.1
 whisperx==3.8.4
 imageio-ffmpeg
 editdistance
