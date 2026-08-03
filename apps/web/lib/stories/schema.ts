@@ -9,6 +9,7 @@ export type StoryErrorCode =
   | "story_malformed_response"
   | "story_timeout"
   | "story_upstream_error"
+  | "story_validation_failed"
   | "internal_error";
 
 export type StoryErrorBody = {
