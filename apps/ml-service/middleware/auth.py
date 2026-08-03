@@ -3,10 +3,18 @@ from starlette.responses import JSONResponse
 
 from config import ML_SERVICE_KEY
 
+PROTECTED_PATHS = {
+    "/transcribe",
+    "/detect-miscue",
+    "/activity-recommendation",
+    "/phonics-lookup",
+    "/narrate",
+}
+
 
 class InternalKeyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
-        if request.url.path in {"/transcribe", "/detect-miscue", "/activity-recommendation", "/narrate"}:
+        if request.url.path in PROTECTED_PATHS:
             internal_key = request.headers.get("X-Internal-Key")
 
             if not ML_SERVICE_KEY or internal_key != ML_SERVICE_KEY:
