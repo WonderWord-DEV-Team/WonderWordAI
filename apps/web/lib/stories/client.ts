@@ -52,7 +52,7 @@ export async function generateStoryWithClaude({
   word,
   phonicsCategory,
   theme,
-  knownWords,
+  knownWords = [],
   phonicsGrounding,
   feedback
 }: {
