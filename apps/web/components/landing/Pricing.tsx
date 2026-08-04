@@ -1,7 +1,14 @@
+"use client";
+
+import { useState } from "react";
+
+type BillingCycle = "monthly" | "yearly";
+
 const plans = [
   {
     name: "FREE",
-    price: "$0",
+    monthlyPrice: 0,
+    yearlyPrice: 0,
     features: ["1 child", "5 sessions/week", "Basic stats"],
     cta: "Start Free",
     cardStyle: "bg-white border border-gray-200",
@@ -11,7 +18,8 @@ const plans = [
   },
   {
     name: "PLAN 1",
-    price: "$9.99",
+    monthlyPrice: 9.99,
+    yearlyPrice: 8.29, // ~17% off monthly, matches "SAVE 17%" badge
     badge: "MOST POPULAR",
     features: [
       "Unlimited scans",
@@ -29,7 +37,8 @@ const plans = [
   },
   {
     name: "PLAN 2",
-    price: "$17.99",
+    monthlyPrice: 17.99,
+    yearlyPrice: 14.93,
     features: [
       "Plan 1 features",
       "Unlimited children",
@@ -46,6 +55,8 @@ const plans = [
 ];
 
 export function Pricing() {
+  const [cycle, setCycle] = useState<BillingCycle>("monthly");
+
   return (
     <section id="pricing" className="px-6 sm:px-12 py-20">
       <h2 className="text-center text-[32px] font-black text-[#1A1A2E]">Simple, Honest Pricing</h2>
@@ -53,10 +64,26 @@ export function Pricing() {
 
       <div className="mt-6 flex justify-center">
         <div className="inline-flex items-center gap-1 bg-white border border-gray-200 rounded-full p-1">
-          <button className="px-4 py-1.5 rounded-full text-sm font-bold bg-white text-gray-800 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setCycle("monthly")}
+            aria-pressed={cycle === "monthly"}
+            className={`px-4 py-1.5 rounded-full text-sm font-bold transition ${
+              cycle === "monthly" ? "bg-[#1A1A2E] text-white shadow-sm" : "text-gray-500 hover:text-gray-800"
+            }`}
+          >
             Monthly
           </button>
-          <button className="px-4 py-1.5 rounded-full text-sm font-bold text-gray-500">Annual</button>
+          <button
+            type="button"
+            onClick={() => setCycle("yearly")}
+            aria-pressed={cycle === "yearly"}
+            className={`px-4 py-1.5 rounded-full text-sm font-bold transition ${
+              cycle === "yearly" ? "bg-[#1A1A2E] text-white shadow-sm" : "text-gray-500 hover:text-gray-800"
+            }`}
+          >
+            Annual
+          </button>
           <span className="ml-1 mr-1 bg-[#0F9C8E] text-white text-[10px] font-black px-2 py-1 rounded-full">
             SAVE 17%
           </span>
@@ -64,30 +91,36 @@ export function Pricing() {
       </div>
 
       <div className="mt-10 grid sm:grid-cols-3 gap-6 max-w-5xl mx-auto items-start">
-        {plans.map((plan) => (
-          <div key={plan.name} className={`relative rounded-3xl p-7 ${plan.cardStyle} ${plan.textStyle}`}>
-            {plan.badge && (
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#1A1A2E] text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-full whitespace-nowrap">
-                {plan.badge}
-              </span>
-            )}
-            <p className="font-black text-base">{plan.name}</p>
-            <p className="mt-2 text-4xl font-black">
-              {plan.price}
-              <span className="text-sm font-bold">/mo</span>
-            </p>
-            <ul className="mt-5 space-y-2.5 text-sm">
-              {plan.features.map((f) => (
-                <li key={f} className="flex items-start gap-2">
-                  <span className={plan.checkColor}>✓</span> {f}
-                </li>
-              ))}
-            </ul>
-            <button className={`mt-7 w-full rounded-full py-3 font-black text-sm ${plan.ctaStyle}`}>
-              {plan.cta}
-            </button>
-          </div>
-        ))}
+        {plans.map((plan) => {
+          const price = cycle === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
+          return (
+            <div key={plan.name} className={`relative rounded-3xl p-7 ${plan.cardStyle} ${plan.textStyle}`}>
+              {plan.badge && (
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#1A1A2E] text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-full whitespace-nowrap">
+                  {plan.badge}
+                </span>
+              )}
+              <p className="font-black text-base">{plan.name}</p>
+              <p className="mt-2 text-4xl font-black">
+                ${price.toFixed(2)}
+                <span className="text-sm font-bold">/mo</span>
+              </p>
+              {cycle === "yearly" && price > 0 && (
+                <p className="mt-1 text-xs font-bold opacity-80">Billed annually</p>
+              )}
+              <ul className="mt-5 space-y-2.5 text-sm">
+                {plan.features.map((f) => (
+                  <li key={f} className="flex items-start gap-2">
+                    <span className={plan.checkColor}>✓</span> {f}
+                  </li>
+                ))}
+              </ul>
+              <button className={`mt-7 w-full rounded-full py-3 font-black text-sm ${plan.ctaStyle}`}>
+                {plan.cta}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
