@@ -1,18 +1,28 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { getSupabaseEnv, hasSupabaseEnv } from "@/lib/supabase/env";
 import { createAdminClient, hasSupabaseAdminEnv } from "@/lib/supabase/admin";
 import { parseUserRole, getRoleHome } from "@/lib/auth/types";
-import { copyCookies } from "@/lib/supabase/middleware-cookies";
 
 export const dynamic = "force-dynamic";
 
 function redirectWithCookies(
-  supabaseResponse: NextResponse,
   url: string,
+  cookiesToSet: Array<{ name: string; value: string; options: any }>
 ) {
   const response = NextResponse.redirect(url);
-  copyCookies(supabaseResponse, response);
+  
+  // De-duplicate cookies keeping the last one set to avoid sending duplicate Set-Cookie headers
+  const uniqueCookies = new Map<string, { value: string; options: any }>();
+  cookiesToSet.forEach(({ name, value, options }) => {
+    uniqueCookies.set(name, { value, options });
+  });
+
+  uniqueCookies.forEach(({ value, options }, name) => {
+    response.cookies.set(name, value, options);
+  });
+  
   return response;
 }
 
@@ -37,16 +47,14 @@ function getSafeRedirectUrl(next: string | null, origin: string, defaultPath: st
   return `${origin}${defaultPath}`;
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next");
   const oauthError = searchParams.get("error");
   const oauthErrorDescription = searchParams.get("error_description");
 
-  let supabaseResponse = NextResponse.next({
-    request
-  });
+  const cookiesToSetOnResponse: Array<{ name: string; value: string; options: any }> = [];
 
   if (oauthError) {
     console.error("[Auth Callback] OAuth provider error:", oauthError, oauthErrorDescription);
@@ -60,21 +68,22 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const { url: supabaseUrl, publishableKey } = getSupabaseEnv();
+    const cookieStore = cookies();
 
+    // Create the supabase server client inline to capture cookie modifications
     const supabase = createServerClient(supabaseUrl, publishableKey, {
       cookies: {
         getAll() {
-          return request.cookies.getAll();
+          return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            request.cookies.set(name, value);
-          });
-          supabaseResponse = NextResponse.next({
-            request
-          });
-          cookiesToSet.forEach(({ name, value, options }) => {
-            supabaseResponse.cookies.set(name, value, options);
+            try {
+              cookieStore.set(name, value, options);
+            } catch {
+              // Server Components cannot set cookies.
+            }
+            cookiesToSetOnResponse.push({ name, value, options });
           });
         }
       }
@@ -85,8 +94,8 @@ export async function GET(request: NextRequest) {
     if (exchangeError) {
       console.error("[Auth Callback] Code exchange failed:", exchangeError);
       return redirectWithCookies(
-        supabaseResponse,
         `${origin}/auth/login?error=auth-code-error`,
+        cookiesToSetOnResponse
       );
     }
 
@@ -95,8 +104,8 @@ export async function GET(request: NextRequest) {
     if (userError || !user) {
       console.error("[Auth Callback] Fetching user failed after session exchange:", userError);
       return redirectWithCookies(
-        supabaseResponse,
         `${origin}/auth/login?error=auth-code-error`,
+        cookiesToSetOnResponse
       );
     }
 
@@ -104,8 +113,8 @@ export async function GET(request: NextRequest) {
       console.error("[Auth Callback] User email is missing from auth response.");
       await supabase.auth.signOut();
       return redirectWithCookies(
-        supabaseResponse,
         `${origin}/auth/login?error=auth-code-error`,
+        cookiesToSetOnResponse
       );
     }
 
@@ -119,12 +128,8 @@ export async function GET(request: NextRequest) {
     let role = parseUserRole(profile?.role);
 
     if (role) {
-      const { error: refreshError } = await supabase.auth.refreshSession();
-      if (refreshError) {
-        console.error("[Auth Callback] Session refresh failed:", refreshError);
-      }
       const targetUrl = getSafeRedirectUrl(next, origin, getRoleHome(role));
-      return redirectWithCookies(supabaseResponse, targetUrl);
+      return redirectWithCookies(targetUrl, cookiesToSetOnResponse);
     }
 
     // If we reach here, the user either has no profile row, or their profile row has no valid role.
@@ -132,8 +137,8 @@ export async function GET(request: NextRequest) {
       console.error("[Auth Callback] Admin client cannot be initialized: SUPABASE_SERVICE_ROLE_KEY is missing.");
       await supabase.auth.signOut();
       return redirectWithCookies(
-        supabaseResponse,
         `${origin}/auth/login?error=provisioning`,
+        cookiesToSetOnResponse
       );
     }
 
@@ -199,7 +204,7 @@ export async function GET(request: NextRequest) {
         }
 
         const targetUrl = getSafeRedirectUrl(next, origin, getRoleHome(newRole));
-        return redirectWithCookies(supabaseResponse, targetUrl);
+        return redirectWithCookies(targetUrl, cookiesToSetOnResponse);
       }
     }
 
@@ -207,14 +212,14 @@ export async function GET(request: NextRequest) {
     // Fallback if creation fails
     await supabase.auth.signOut();
     return redirectWithCookies(
-      supabaseResponse,
       `${origin}/auth/login?error=provisioning`,
+      cookiesToSetOnResponse
     );
   }
 
   // Fallback redirect if exchanging code failed or code is missing
   return redirectWithCookies(
-    supabaseResponse,
     `${origin}/auth/login?error=auth-code-error`,
+    cookiesToSetOnResponse
   );
 }
