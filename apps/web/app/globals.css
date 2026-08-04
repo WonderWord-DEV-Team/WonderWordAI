@@ -85,3 +85,38 @@ a {
     linear-gradient(90deg, rgb(var(--color-teal) / 0.09) 1px, transparent 1px);
   background-size: 1.4rem 1.4rem;
 }
+
+/* ticket: implement printable activity card layout (css @media print) */
+/* the .print-activity-card element is rendered hidden on screen (tailwind's
+   `hidden print:block`) and is the only thing meant to render when printing;
+   everything else the browser would otherwise print is hidden below. */
+@media print {
+  @page {
+    margin: 0.6in;
+  }
+
+  html,
+  body {
+    background: #fff;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .print-activity-card,
+  .print-activity-card * {
+    visibility: visible;
+  }
+
+  .print-activity-card {
+    position: absolute;
+    inset: 0;
+    box-shadow: none;
+    border: 1px solid rgb(var(--color-line));
+  }
+
+  .print-activity-card-break {
+    page-break-inside: avoid;
+  }
+}
