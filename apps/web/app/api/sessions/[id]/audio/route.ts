@@ -80,14 +80,17 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     return errorResponse("session_closed", "Reading session is already closed.", 409);
   }
 
-  const { audio, response: audioResponse } = await getValidatedAudio(request);
+  const { audio, referenceText, response: audioResponse } = await getValidatedAudio(request);
 
   if (audioResponse) {
     return audioResponse;
   }
 
   try {
-    const mlResult = await transcribeReadingAudio({ audio });
+    const mlResult = await transcribeReadingAudio({
+      audio,
+      referenceText: referenceText ?? undefined
+    });
     const responseData = mapMlTranscriptionToSessionAudio({
       sessionId: session.id,
       result: mlResult
@@ -96,7 +99,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const persistableEvents = getPersistableReadingEvents({
       sessionId: session.id,
       childId: appUser.id,
-      miscues: mlResult.miscues
+      readingEvents: mlResult.reading_events
     });
 
     if (persistableEvents.length > 0) {
@@ -210,8 +213,8 @@ async function getAuthenticatedAppUser(
 }
 
 async function getValidatedAudio(request: NextRequest): Promise<
-  | { audio: File; response: null }
-  | { audio: null; response: NextResponse }
+  | { audio: File; referenceText: string | null; response: null }
+  | { audio: null; referenceText: null; response: NextResponse }
 > {
   let formData: FormData;
 
@@ -220,6 +223,7 @@ async function getValidatedAudio(request: NextRequest): Promise<
   } catch {
     return {
       audio: null,
+      referenceText: null,
       response: errorResponse("audio_missing", "No audio file provided.", 400)
     };
   }
@@ -229,6 +233,7 @@ async function getValidatedAudio(request: NextRequest): Promise<
   if (!(audio instanceof File)) {
     return {
       audio: null,
+      referenceText: null,
       response: errorResponse("audio_missing", "No audio file provided.", 400)
     };
   }
@@ -236,6 +241,7 @@ async function getValidatedAudio(request: NextRequest): Promise<
   if (audio.size === 0) {
     return {
       audio: null,
+      referenceText: null,
       response: errorResponse("audio_empty", "Audio file is empty.", 400)
     };
   }
@@ -243,6 +249,7 @@ async function getValidatedAudio(request: NextRequest): Promise<
   if (audio.size > MAX_AUDIO_BYTES) {
     return {
       audio: null,
+      referenceText: null,
       response: errorResponse("audio_too_large", "Audio file is too large.", 413)
     };
   }
@@ -250,11 +257,18 @@ async function getValidatedAudio(request: NextRequest): Promise<
   if (!isAllowedAudioType(audio.type)) {
     return {
       audio: null,
+      referenceText: null,
       response: errorResponse("invalid_audio_type", "Audio format is not supported.", 400)
     };
   }
 
-  return { audio, response: null };
+  const referenceText = formData.get("reference_text");
+
+  return {
+    audio,
+    referenceText: typeof referenceText === "string" ? referenceText.trim() || null : null,
+    response: null
+  };
 }
 
 function errorResponse(code: SessionAudioErrorCode, message: string, status: number) {
