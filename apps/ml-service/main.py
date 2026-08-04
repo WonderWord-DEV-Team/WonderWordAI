@@ -8,14 +8,11 @@ from routers.transcribe import router as transcribe_router
 from routers.phonics_lookup import router as phonics_router
 # ticket: integrate playful practice recommendations into parent dashboard
 from routers.activity_recommendation import router as activity_recommendation_router
+from routers.narrate import router as narrate_router
 from services.embedding_service import embedding_model
 
-# NOTE: /narrate is intentionally NOT registered yet. routers/narrate.py exists,
-# but services/narration_service.py has no real TTS provider implementation
-# (get_narration_provider() always raises NarrationProviderConfigurationError).
-# Register it here once a provider (OpenAI TTS, ElevenLabs, etc.) is wired up:
-#   from routers.narrate import router as narrate_router
-#   app.include_router(narrate_router)
+# NOTE: /narrate is now registered and active since we implemented OpenAI TTS
+# provider in services/narration_service.py.
 
 app = FastAPI()
 
@@ -35,6 +32,7 @@ app.include_router(detect_miscue_router)
 app.include_router(phonics_router)
 # ticket: integrate playful practice recommendations into parent dashboard
 app.include_router(activity_recommendation_router)
+app.include_router(narrate_router)
 
 
 @app.get("/health")

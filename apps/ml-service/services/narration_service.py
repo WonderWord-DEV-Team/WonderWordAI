@@ -41,6 +41,76 @@ class NarrationProvider(Protocol):
         ...
 
 
+class OpenAINarrationProvider:
+    def __init__(self):
+        self.api_key = os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise NarrationProviderConfigurationError(
+                "Missing OPENAI_API_KEY environment variable."
+            )
+        
+        # Determine model
+        model_env = (os.getenv("TTS_MODEL") or "tts-1").strip().lower()
+        self.model = "tts-1" if model_env == "default" else model_env
+        
+        # Determine voice
+        voice_env = (os.getenv("TTS_VOICE") or "alloy").strip().lower()
+        self.voice = "alloy" if voice_env == "default" else voice_env
+
+    def synthesize(self, text: str) -> GeneratedNarrationAudio:
+        import requests
+        import whisperx
+        from services.whisper_service import _ensure_ffmpeg_on_path
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": self.model,
+            "input": text,
+            "voice": self.voice,
+            "response_format": "mp3"
+        }
+        
+        try:
+            response = requests.post(
+                "https://api.openai.com/v1/audio/speech",
+                json=payload,
+                headers=headers,
+                timeout=30
+            )
+            response.raise_for_status()
+            audio_bytes = response.content
+        except Exception as e:
+            raise NarrationProviderError(f"OpenAI TTS synthesis failed: {e}") from e
+
+        # Calculate duration using a temporary file and whisperx.load_audio
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_file:
+                temp_file.write(audio_bytes)
+                temp_path = temp_file.name
+            
+            # Ensure ffmpeg is on path before loading audio
+            _ensure_ffmpeg_on_path()
+            
+            # Load and get duration
+            audio_data = whisperx.load_audio(temp_path)
+            duration = len(audio_data) / 16000.0
+        except Exception as e:
+            raise NarrationProviderError(f"Failed to decode audio duration: {e}") from e
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                os.remove(temp_path)
+
+        return GeneratedNarrationAudio(
+            audio_bytes=audio_bytes,
+            mime_type="audio/mpeg",
+            duration=duration
+        )
+
+
 def get_narration_provider() -> NarrationProvider:
     provider_name = (TTS_PROVIDER or "").strip().lower()
 
@@ -48,6 +118,9 @@ def get_narration_provider() -> NarrationProvider:
         raise NarrationProviderConfigurationError(
             "No production TTS provider is configured. Set TTS_PROVIDER after selecting a provider."
         )
+
+    if provider_name == "openai":
+        return OpenAINarrationProvider()
 
     raise NarrationProviderConfigurationError(
         f"TTS_PROVIDER={provider_name!r} does not have an implementation in this service."
