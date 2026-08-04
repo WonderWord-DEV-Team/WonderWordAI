@@ -18,10 +18,13 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 function getInitialError(error?: string) {
-  if (error !== "provisioning") {
-    return undefined;
+  if (error === "provisioning") {
+    return "Your account is signed in, but it has not been provisioned with a valid role yet. Ask an administrator to finish setup.";
   }
-  return "Your account is signed in, but it has not been provisioned with a valid role yet. Ask an administrator to finish setup.";
+  if (error === "auth-code-error") {
+    return "Authentication failed or code expired. Please try signing in again.";
+  }
+  return undefined;
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {

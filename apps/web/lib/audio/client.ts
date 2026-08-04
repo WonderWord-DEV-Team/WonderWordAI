@@ -34,9 +34,11 @@ export class AudioTranscriptionError extends Error {
 }
 
 export async function transcribeReadingAudio({
-  audio
+  audio,
+  referenceText
 }: {
   audio: File;
+  referenceText?: string;
 }): Promise<MlTranscribeResult> {
   const baseUrl = process.env.ML_SERVICE_URL || DEFAULT_ML_SERVICE_URL;
   const serviceKey = process.env.ML_SERVICE_KEY;
@@ -54,6 +56,9 @@ export async function transcribeReadingAudio({
   const timeout = setTimeout(() => controller.abort(), TRANSCRIPTION_TIMEOUT_MS);
   const body = new FormData();
   body.append("audio", audio, audio.name || "reading-audio");
+  if (referenceText?.trim()) {
+    body.append("reference_text", referenceText.trim());
+  }
 
   let response: Response;
 
