@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 type AppHeaderProps = {
   activeTab?: "home" | "library" | "store" | "diagnostics";
   stars?: number;
@@ -18,11 +20,7 @@ export function AppHeader({
 }: AppHeaderProps) {
   return (
     <header className="flex items-center justify-between px-6 sm:px-10 py-5 bg-[#FDF8F2]">
-      <p className="font-display text-2xl font-black">
-        <span className="text-[#E8604F]">Wonder</span>
-        <span className="text-[#3FC1B0]">Word</span>{" "}
-        <span className="text-[#E8604F]">AI</span>
-      </p>
+      <Image src="/logo.svg" alt="WonderWord AI" width={160} height={36} priority />
 
       <nav className="hidden sm:flex items-center gap-8 text-sm font-bold text-gray-700">
         {navItems.map((item) => (
