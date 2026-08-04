@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe/server";
-import {
-  createSupabaseServerClient,
-  createSupabaseServiceClient,
-} from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createClient();
   const {
     data: { user: authUser },
   } = await supabase.auth.getUser();
@@ -25,7 +23,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const service = createSupabaseServiceClient();
+  const service = createServiceClient();
   const { data: sub } = await service
     .from("subscriptions")
     .select("stripe_customer_id")
