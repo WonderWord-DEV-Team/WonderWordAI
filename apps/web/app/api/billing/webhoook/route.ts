@@ -1,80 +1,85 @@
-import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
+import { NextResponse } from "next/server";
+import Stripe from "stripe";
+import { stripe } from "@/lib/stripe/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
-function getStripeClient() {
-  const apiKey = process.env.STRIPE_SECRET_KEY;
+// Route handlers don't parse the body by default — request.text() below
+// gives us the raw payload, which is required for signature verification.
+export const runtime = "nodejs";
 
-  if (!apiKey) {
-    throw new Error('STRIPE_SECRET_KEY is not configured.');
+export async function POST(request: Request) {
+  const body = await request.text();
+  const signature = request.headers.get("stripe-signature");
+
+  if (!signature || !process.env.STRIPE_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
-
-  return new Stripe(apiKey, {
-    apiVersion: '2026-06-24.dahlia',
-  });
-}
-
-export async function POST(req: Request) {
-  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-  if (!endpointSecret) {
-    console.error('STRIPE_WEBHOOK_SECRET is not configured.');
-    return NextResponse.json({ error: 'Webhook is not configured.' }, { status: 500 });
-  }
-
-  let stripe: Stripe;
-  try {
-    stripe = getStripeClient();
-  } catch (err) {
-    console.error('Stripe client could not be initialized.', err);
-    return NextResponse.json({ error: 'Webhook is not configured.' }, { status: 500 });
-  }
-
-  const body = await req.text();
-  const sig = req.headers.get('stripe-signature') as string;
 
   let event: Stripe.Event;
-
   try {
-    event = stripe.webhooks.constructEvent(body, sig, endpointSecret);
-  } catch (err: any) {
-    console.error(`Webhook signature verification failed: ${err.message}`);
-    return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
+    event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.error("Webhook signature verification failed:", err);
+    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  // Handle the events for the subscription lifecycle
+  const service = createServiceClient();
+
   switch (event.type) {
-    case 'checkout.session.completed': {
-      const checkoutSession = event.data.object as Stripe.Checkout.Session;
-
-      const userId = checkoutSession.client_reference_id;
-      const customerId = checkoutSession.customer;
-
-      console.log(`✅ Payment confirmed! User ID: ${userId} | Customer ID: ${customerId}`);
-
-      // UPDATE Supabase using the Service Role Key to activate the user's premium plan.
-      break;
-    }
-
-    case 'invoice.payment_failed': {
-      const failedInvoice = event.data.object as Stripe.Invoice;
-      console.log(`❌ Payment failed for Stripe Customer: ${failedInvoice.customer}`);
-
-      // Update the user's status in Supabase to 'past_due' or cancel the plan.
-      break;
-    }
-
-    case 'customer.subscription.deleted': {
+    case "customer.subscription.created":
+    case "customer.subscription.updated":
+    case "customer.subscription.deleted": {
       const subscription = event.data.object as Stripe.Subscription;
-      console.log(`🗑️ Subscription canceled for Customer: ${subscription.customer}`);
 
-      // Revoke premium access in Supabase.
+      const plan = subscription.metadata?.plan ?? undefined;
+      const interval = subscription.metadata?.interval ?? undefined;
+      const currentPeriodEnd = subscription.items.data[0]?.current_period_end;
+
+      await service
+        .from("subscriptions")
+        .update({
+          status:
+            event.type === "customer.subscription.deleted"
+              ? "canceled"
+              : subscription.status,
+          cancel_at_period_end: subscription.cancel_at_period_end,
+          current_period_end: currentPeriodEnd
+            ? new Date(currentPeriodEnd * 1000).toISOString()
+            : null,
+          ...(plan ? { plan } : {}),
+          ...(interval ? { billing_interval: interval } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("stripe_subscription_id", subscription.id);
+      break;
+    }
+
+    case "invoice.payment_failed": {
+      const invoice = event.data.object as Stripe.Invoice;
+      const subscriptionId =
+        typeof invoice.parent?.subscription_details?.subscription === "string"
+          ? invoice.parent.subscription_details.subscription
+          : invoice.parent?.subscription_details?.subscription?.id;
+
+      if (subscriptionId) {
+        await service
+          .from("subscriptions")
+          .update({ status: "past_due", updated_at: new Date().toISOString() })
+          .eq("stripe_subscription_id", subscriptionId);
+      }
+      // TODO: notify the parent (email/SMS) that their payment failed.
       break;
     }
 
     default:
-      console.log(`Unhandled event type: ${event.type}`);
+      // Unhandled event types are fine to ignore — Stripe sends many more
+      // than we act on here.
+      break;
   }
 
-  // Return a 200 response quickly so Stripe doesn't retry the webhook
   return NextResponse.json({ received: true });
 }
