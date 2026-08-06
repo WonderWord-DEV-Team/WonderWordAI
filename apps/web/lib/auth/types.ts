@@ -18,5 +18,5 @@
   }
 
   export function getRoleHome(role: UserRole) {
-    return role === "PARENT" ? "/parent/dashboard" : "/child/demo-session/read";
+    return role === "PARENT" ? "/parent/dashboard" : "/child";
   }
