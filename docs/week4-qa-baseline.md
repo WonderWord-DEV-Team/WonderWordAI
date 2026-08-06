@@ -31,7 +31,7 @@ First verified fix commit: `96c038c9e84363722a0a449e29a90455dadf3f2f`
 | Karaoke | `npm run test:karaoke` | Passed. |
 | Narration | `npm run test:narration` | Passed. |
 | Live gate | `npm run test:live` | Passed with clear skip: requires `RUN_LIVE_API_TESTS=true`. |
-| Typecheck | `npm run typecheck` | Passed after making the script non-incremental to avoid stale `.next/types` cache entries. |
+| Typecheck | `npm run typecheck` | Passed after moving standalone `tsc` to a source-only typecheck config; `next build` remains the Next route/type validator. |
 | Lint | `npm run lint` | Passed with existing `<img>` warnings in help, privacy, settings, and terms pages. |
 | Build | `npm run build` | Passed after lazy Stripe client initialization. Same existing `<img>` warnings. |
 | ML install | `.venv/bin/python -m pip install -r requirements.txt pytest` | Initial sandbox DNS failure; passed with network approval. Current requirements install the heavyweight production ML stack. |
@@ -47,7 +47,7 @@ First verified fix commit: `96c038c9e84363722a0a449e29a90455dadf3f2f`
 - Normal web `vitest run` also collected `node:test` files and generated `.test-output`, producing "No test suite found" failures.
 - `test_api/stories/generate.test.ts` left the ML validation and phonics clients unmocked, causing deterministic mocked tests to fail without `ML_SERVICE_KEY`.
 - `npm run test:auth` expected child role fallback to `/child/demo-session/read`, but the current role home is `/child`.
-- `npm run typecheck` could fail locally from stale incremental `.next/types` entries.
+- `npm run typecheck` could fail locally from stale or partial `.next/types` entries after install/build churn.
 - `next build` failed without `STRIPE_SECRET_KEY` because the Stripe client threw during module import.
 - ML pytest failed without NLTK `cmudict`; the test path attempted a network download during deterministic tests.
 
