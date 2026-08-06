@@ -52,13 +52,17 @@ export async function generateStoryWithClaude({
   word,
   phonicsCategory,
   theme,
-  knownWords = []
+  knownWords = [],
+  phonicsGrounding,
+  feedback
 }: {
   apiKey: string;
   word: string;
   phonicsCategory: string;
   theme?: string;
   knownWords?: string[];
+  phonicsGrounding?: { ruleExplanation: string; examples: string[] } | null;
+  feedback?: string[];
 }): Promise<StoryModelResponse> {
   const anthropic = new Anthropic({
     apiKey,

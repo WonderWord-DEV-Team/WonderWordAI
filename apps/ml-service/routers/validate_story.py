@@ -1,105 +1,175 @@
+import re
 from typing import Annotated, Optional
 
+import textstat
 from fastapi import APIRouter, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from services.story_validation import validate_story
 from services.supabase_service import get_supabase_client
-
-try:
-    import sentry_sdk
-except ImportError:  # pragma: no cover - sentry-sdk should be in requirements.txt
-    sentry_sdk = None
 
 router = APIRouter()
 
+# ticket: implement /api/stories/generate orchestration (known-words -> sonnet -> validate -> image -> store)
+#
+# content_safety is a keyword blocklist + a lightweight positive-word heuristic,
+# not a full spaCy sentiment/NER pipeline (the api-contract.md notes spaCy as an
+# option). For a short, tightly-scoped children's story this keeps the guardrail
+# fast and dependency-light; each check below is an isolated function, so a
+# real spaCy-based check_content_safety() can be swapped in later without
+# touching the rest of the endpoint.
+BANNED_KEYWORDS = {
+    "kill", "killed", "killing", "die", "died", "death", "dead", "blood",
+    "gun", "guns", "knife", "knives", "weapon", "weapons", "hate", "hated",
+    "stupid", "hurt", "hurts", "scared", "afraid", "monster", "monsters",
+    "nightmare", "cry", "crying", "fight", "fighting", "war", "hell",
+    "damn", "ugly", "kidnap", "gore", "evil", "demon", "curse", "cursed"
+}
+
+POSITIVE_WORDS = {
+    "happy", "happily", "fun", "great", "yay", "smiled", "smile", "smiling",
+    "laughed", "laugh", "laughing", "joy", "joyful", "excited", "wonderful",
+    "amazing", "love", "loved", "proud", "cheer", "cheered", "hooray",
+    "glad", "delight", "delighted", "sunny", "warm", "safe", "friend",
+    "friends", "hug", "hugged", "celebrate", "celebrated"
+}
+
+MAX_GRADE_LEVEL = 3.0
+MIN_WORD_OCCURRENCES = 2
+MAX_WORD_OCCURRENCES = 3
+VISUAL_MARKER = "[VISUAL]"
+
+GuardrailResult = tuple[bool, list[str]]
+
 
 class ValidateStoryRequest(BaseModel):
-    story_text: str = Field(..., min_length=1)
-    child_id: str = Field(..., min_length=1)
-    word: str = Field(..., min_length=1)
+    story_text: str
+    child_id: str
+    word: str
     known_words: Optional[list[str]] = None
 
 
+def _tokenize(text: str) -> list[str]:
+    return re.findall(r"[a-zA-Z']+", text.lower())
+
+
+def check_vocabulary(story_text: str, word: str, known_words: list[str]) -> GuardrailResult:
+    known_set = {w.lower() for w in known_words}
+    target = word.lower()
+    tokens = _tokenize(story_text.replace(VISUAL_MARKER, " "))
+
+    offenders = sorted({token for token in tokens if token != target and token not in known_set})
+
+    if offenders:
+        preview = ", ".join(offenders[:5])
+        more = f" (+{len(offenders) - 5} more)" if len(offenders) > 5 else ""
+        return False, [f"vocabulary: word(s) '{preview}'{more} not in child known_words"]
+
+    return True, []
+
+
+def check_complexity(story_text: str) -> GuardrailResult:
+    grade = textstat.flesch_kincaid_grade(story_text)
+
+    if grade >= MAX_GRADE_LEVEL:
+        return False, [f"complexity: Flesch-Kincaid grade {grade:.1f} exceeds limit of {MAX_GRADE_LEVEL:.1f}"]
+
+    return True, []
+
+
+def check_content_safety(story_text: str) -> GuardrailResult:
+    lowered = story_text.lower()
+    errors: list[str] = []
+
+    found_banned = sorted(
+        keyword for keyword in BANNED_KEYWORDS if re.search(rf"\b{re.escape(keyword)}\b", lowered)
+    )
+    if found_banned:
+        errors.append(f"content_safety: banned keyword(s) found: {', '.join(found_banned)}")
+
+    has_positive = any(re.search(rf"\b{re.escape(w)}\b", lowered) for w in POSITIVE_WORDS)
+    if not has_positive:
+        errors.append("content_safety: story does not read as positive in tone")
+
+    return len(errors) == 0, errors
+
+
+def check_structure(story_text: str, word: str) -> GuardrailResult:
+    errors: list[str] = []
+
+    if VISUAL_MARKER not in story_text:
+        errors.append(f"structure: missing {VISUAL_MARKER} marker")
+
+    count = len(re.findall(rf"\b{re.escape(word)}\b", story_text, flags=re.IGNORECASE))
+    if not (MIN_WORD_OCCURRENCES <= count <= MAX_WORD_OCCURRENCES):
+        errors.append(
+            f"structure: target word appears {count} time(s), expected "
+            f"{MIN_WORD_OCCURRENCES}-{MAX_WORD_OCCURRENCES}"
+        )
+
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", story_text.strip()) if s.strip()]
+    ending = sentences[-1].lower() if sentences else ""
+    ends_positively = ending.endswith("!") or any(
+        re.search(rf"\b{re.escape(w)}\b", ending) for w in POSITIVE_WORDS
+    )
+    if not ends_positively:
+        errors.append("structure: story does not end on a positive note")
+
+    return len(errors) == 0, errors
+
+
 @router.post("/validate-story")
-async def validate_story_endpoint(
+async def validate_story(
     request: ValidateStoryRequest,
     x_internal_key: Annotated[str | None, Header(alias="X-Internal-Key")] = None,
 ):
-    _ = x_internal_key  # enforced centrally by InternalKeyMiddleware
+    _ = x_internal_key
+
+    if not request.story_text.strip() or not request.child_id.strip() or not request.word.strip():
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "missing_fields", "message": "story_text, child_id, and word are required."}
+        )
 
     known_words = request.known_words
     if known_words is None:
-        known_words = await _fetch_known_words(request.child_id)
+        known_words = []
+        try:
+            supabase = get_supabase_client()
+            result = (
+                supabase.table("child_known_words")
+                .select("words")
+                .eq("child_id", request.child_id)
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                known_words = [str(w) for w in (result.data[0].get("words") or [])]
+        except Exception:
+            # if we can't fetch known words, vocabulary will fail loudly below
+            # rather than silently passing everything
+            known_words = []
 
-    result = validate_story(
-        story_text=request.story_text,
-        word=request.word,
-        known_words=known_words,
-    )
-
-    if not result.is_valid:
-        _log_validation_failure(request, result)
-
-    return {
-        "is_valid": result.is_valid,
-        "validation_score": result.validation_score,
-        "errors": result.errors,
-        "guardrails": result.guardrails,
+    checks: dict[str, GuardrailResult] = {
+        "vocabulary": check_vocabulary(request.story_text, request.word, known_words),
+        "complexity": check_complexity(request.story_text),
+        "content_safety": check_content_safety(request.story_text),
+        "structure": check_structure(request.story_text, request.word)
     }
 
+    errors: list[str] = []
+    guardrails: dict[str, str] = {}
+    passed_count = 0
 
-async def _fetch_known_words(child_id: str) -> list[str]:
-    try:
-        supabase = get_supabase_client()
-        response = (
-            supabase.table("child_known_words")
-            .select("words")
-            .eq("child_id", child_id)
-            .limit(1)
-            .execute()
-        )
-    except Exception as exc:
-        _capture_exception(exc)
-        raise HTTPException(status_code=500, detail="Failed to fetch known words") from exc
+    for name, (passed, guardrail_errors) in checks.items():
+        guardrails[name] = "passed" if passed else "failed"
+        if passed:
+            passed_count += 1
+        else:
+            errors.extend(guardrail_errors)
 
-    if not response.data:
-        return []
-
-    words = response.data[0].get("words") or []
-    return [str(w) for w in words]
-
-
-def _log_validation_failure(request: ValidateStoryRequest, result) -> None:
-    if sentry_sdk is None:
-        return
-
-    try:
-        with sentry_sdk.new_scope() as scope:
-            scope.set_context(
-                "story_validation",
-                {
-                    "child_id": request.child_id,
-                    "word": request.word,
-                    "errors": result.errors,
-                    "guardrails": result.guardrails,
-                    "validation_score": result.validation_score,
-                },
-            )
-            sentry_sdk.capture_message(
-                "story_validation_failed",
-                level="warning",
-            )
-    except Exception:
-        # Sentry must never break the request.
-        pass
-
-
-def _capture_exception(exc: Exception) -> None:
-    if sentry_sdk is None:
-        return
-
-    try:
-        sentry_sdk.capture_exception(exc)
-    except Exception:
-        pass
+    return {
+        "is_valid": passed_count == len(checks),
+        "validation_score": passed_count * 25,
+        "errors": errors,
+        "guardrails": guardrails
+    }

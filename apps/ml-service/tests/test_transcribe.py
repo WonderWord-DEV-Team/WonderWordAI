@@ -61,6 +61,8 @@ def test_transcribe(mock_transcribe, monkeypatch):
 
     assert "words" in data
     assert "timestamps" in data
+    assert data["miscues"] == []
+    assert data["reading_events"] == []
 
 
 @patch("routers.transcribe.transcribe_audio")
@@ -93,8 +95,8 @@ def test_transcribe_returns_expected_word_for_reference_miscue(mock_transcribe, 
     assert response.json()["miscues"] == [
         {
             "word": "play",
-            "expected_phonemes": "play",
-            "actual_phonemes": "please",
+            "expected_word": "play",
+            "actual_word": "please",
             "is_correct": False,
         }
     ]

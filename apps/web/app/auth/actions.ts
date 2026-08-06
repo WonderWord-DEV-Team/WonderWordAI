@@ -5,6 +5,8 @@ import { getRoleHome, parseUserRole } from "@/lib/auth/types";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import type { LoginActionState } from "@/app/auth/login/state";
+import type { ForgotPasswordActionState } from "@/app/auth/forgot-password/state";
+import type { ResetPasswordActionState } from "@/app/auth/reset-password/state";
 
 export async function signInWithPassword(
   _previousState: LoginActionState,
@@ -77,4 +79,53 @@ export async function signOut() {
   }
 
   redirect("/auth/login");
+}
+
+export async function requestPasswordReset(
+  _previousState: ForgotPasswordActionState,
+  formData: FormData
+): Promise<ForgotPasswordActionState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+
+  if (!hasSupabaseEnv()) {
+    return { email, success: false, message: "Supabase is not configured for this environment." };
+  }
+  if (!email) {
+    return { email, success: false, message: "Enter your email address." };
+  }
+
+  const supabase = createClient();
+  await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/auth/reset-password`,
+  });
+
+  // Always return success — avoids leaking which emails are registered
+  return { email, success: true, message: null };
+}
+
+export async function updatePassword(
+  _previousState: ResetPasswordActionState,
+  formData: FormData
+): Promise<ResetPasswordActionState> {
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (!hasSupabaseEnv()) {
+    return { success: false, message: "Supabase is not configured for this environment." };
+  }
+  if (password.length < 8) {
+    return { success: false, message: "Password must be at least 8 characters." };
+  }
+  if (password !== confirmPassword) {
+    return { success: false, message: "Passwords do not match." };
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase.auth.updateUser({ password });
+
+  if (error) {
+    return { success: false, message: "We couldn't update your password. Try requesting a new reset link." };
+  }
+
+  return { success: true, message: null };
 }

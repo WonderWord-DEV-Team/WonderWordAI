@@ -35,8 +35,8 @@ def _reference_miscues(reference_text: str, recognized_words: list[str]) -> list
             actual_word = replacement_words[offset] if offset < len(replacement_words) else ""
             miscues.append({
                 "word": expected_word,
-                "expected_phonemes": expected_word,
-                "actual_phonemes": actual_word,
+                "expected_word": expected_word,
+                "actual_word": actual_word,
                 "is_correct": False,
             })
 
@@ -46,10 +46,11 @@ def _reference_miscues(reference_text: str, recognized_words: list[str]) -> list
 @router.post("/transcribe")
 async def transcribe(
     audio: UploadFile = File(...),
-    reference_text: str | None = Form(default=None),
+    reference_text: Annotated[str | None, Form()] = None,
     x_internal_key: Annotated[str | None, Header(alias="X-Internal-Key")] = None,
 ):
     _ = x_internal_key
+    _ = reference_text
     suffix = os.path.splitext(audio.filename or "")[1]
     temp_path = None
 
@@ -105,8 +106,9 @@ async def transcribe(
                 if score < CONFIDENCE_THRESHOLD:
                     miscues.append({
                         "word": word,
-                        "expected_phonemes": "",
-                        "actual_phonemes": "",
+                        "expected_word": "",
+                        "actual_word": word,
+                        "is_correct": False,
                     })                      
 
         if reference_text and reference_text.strip():
@@ -118,6 +120,7 @@ async def transcribe(
             "transcript": " ".join(segment["text"] for segment in segments),
             "segments": segments,
             "miscues": miscues,
+            "reading_events": [],
         }
         print(
             f"Transcription complete: words={len(words)}, miscues={len(miscues)}",

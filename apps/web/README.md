@@ -274,6 +274,8 @@ Request:
 
 - Content-Type: `multipart/form-data`
 - Required field: `audio`
+- Optional field: `reference_text` with the worksheet/passage text being read. The web reader sends
+  this when scanned worksheet text is available so the ML service can score target-word attempts.
 - Maximum audio size: `15 MB`
 - Supported audio MIME types: `audio/webm`, `audio/ogg`, `audio/mp4`, `audio/mpeg`, `audio/wav`
 
@@ -306,8 +308,36 @@ Current ML service contract:
 
 - Endpoint: `POST ${ML_SERVICE_URL}/transcribe`
 - Header: `X-Internal-Key: ${ML_SERVICE_KEY}`
-- Multipart field: `audio`
-- Response fields: `words`, `timestamps`, `transcript`, `segments`, `miscues`
+- Multipart fields: `audio`, optional `reference_text`
+- Response fields: `words`, `timestamps`, `transcript`, `segments`, `miscues`, `reading_events`
+
+`miscues` are practice/display errors only. They are not used as the source of truth for
+`public.reading_events` because they should not contain correctly read words. Persisted
+`public.reading_events` rows are created only from ML `reading_events`, an explicit scored-attempt
+array containing every evaluated target word:
+
+```json
+{
+  "reading_events": [
+    {
+      "word": "cat",
+      "expected_phonemes": "K AE T",
+      "actual_phonemes": "K AE T",
+      "phonics_category": "short-a",
+      "similarity_score": 0.98,
+      "is_correct": true
+    },
+    {
+      "word": "shark",
+      "expected_phonemes": "SH AH R K",
+      "actual_phonemes": "S AH R K",
+      "phonics_category": "sh-digraph",
+      "similarity_score": 0.62,
+      "is_correct": false
+    }
+  ]
+}
+```
 
 Authorization and error statuses:
 
@@ -328,10 +358,9 @@ Raw child audio has zero retention in the web app. The route does not upload aud
 Storage, does not write audio to the repository or permanent disk, does not log request bodies or
 audio bytes, and does not include audio data in responses or telemetry. Only structured derived
 reading results may be stored in `public.reading_events`. With the current ML `/transcribe`
-implementation, miscues do not include the non-empty phoneme and phonics-category fields required by
-`reading_events`, so the route returns transcription results first and leaves session totals
-unchanged. Add an idempotency key or attempt identifier before aggregating totals from retried
-uploads.
+implementation, `reading_events` is returned as an empty array until a scorer emits real evaluated
+target-word attempts. Add an idempotency key or attempt identifier before aggregating totals from
+retried uploads.
 
 ### `POST /api/stories/:storyId/narration`
 

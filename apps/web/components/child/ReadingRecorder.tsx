@@ -299,7 +299,8 @@ export function ReadingRecorder({
     try {
       const result = await uploadSessionAudio({
         sessionId: nextSessionId,
-        audio: audioBlob
+        audio: audioBlob,
+        referenceText: worksheetText
       });
       const timeline = buildKaraokeTimeline({
         worksheetText: worksheetText ?? "",
