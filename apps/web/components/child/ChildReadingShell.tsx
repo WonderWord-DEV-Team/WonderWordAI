@@ -1,35 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SignOutButton } from "@/components/auth/SignOutButton";
+import { useMemo, useState } from "react";
+import { LogOut, Volume2, Mic } from "lucide-react";
 import { useChildSession } from "@/components/child/ChildSessionContext";
 import { KaraokeText } from "@/components/child/KaraokeText";
 import { ReadingRecorder } from "@/components/child/ReadingRecorder";
-import { StoryTab } from "@/components/child/StoryTab";
-import { BrandHeader } from "@/components/shared/BrandHeader";
-import { MetricCard } from "@/components/shared/MetricCard";
-import { PageContainer } from "@/components/shared/PageContainer";
-import { PlaceholderCard } from "@/components/shared/PlaceholderCard";
-import { StatusBadge } from "@/components/shared/StatusBadge";
 import { WorksheetCapture } from "@/components/worksheet/WorksheetCapture";
 import { useCreateSession, useOpenSessions } from "@/hooks/useSessions";
 import type { AuthContext } from "@/lib/auth/types";
 import { normalizeKaraokeWord, type KaraokeTimeline } from "@/lib/karaoke/timeline";
-import { useGenerateStory } from "@/hooks/useGenerateStory";
+import type { SessionAudioMiscue } from "@/lib/audio/schema";
 
 type ChildReadingShellProps = {
   auth: AuthContext;
 };
 
-// ticket: implement image rendering inside story tab (skeleton + placeholder)
-type ReadingPanelTab = "text" | "story";
-
-const READING_PANEL_TABS: { label: string; value: ReadingPanelTab }[] = [
-  { label: "Reading Text", value: "text" },
-  { label: "Story", value: "story" }
-];
-
-const sessionMetrics = ["Time", "Words read", "Accuracy"];
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function ChildReadingShell({ auth }: ChildReadingShellProps) {
@@ -39,256 +24,256 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
     childId,
     setChildId,
     worksheetText,
-    imageKeywords,
     worksheetStatus,
-    latestTranscription,
-    setLatestTranscription,
-    setActiveWordIndex,
     setWorksheetStatus,
-    setOcrResult,
-    clearOcrResult
+    setOcrResult
   } = useChildSession();
   const { data: openSessions } = useOpenSessions();
-  const {
-    mutate: generateStory,
-    data: storyResult,
-    isPending: isGeneratingStory,
-    isError: isStoryError,
-    reset: resetStoryMutation
-  } = useGenerateStory();
-  const generatedForTextRef = useRef<string | null>(null);
-  const sessionRequestRef = useRef<Promise<string> | null>(null);
   const { mutateAsync: createSession } = useCreateSession();
-  const isDemoSession = sessionId === "demo-session";
-  const isReadingReady = Boolean(worksheetText);
-  // ticket: implement image rendering inside story tab (skeleton + placeholder)
-  const [activeTab, setActiveTab] = useState<ReadingPanelTab>("text");
+
   const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeTimeline | null>(null);
   const [playbackState, setPlaybackState] = useState({
     activeIndex: -1,
     currentTime: 0,
     playbackCompleted: false
   });
-  const miscueWords = useMemo(
-    () => new Set(latestTranscription?.miscues.map((miscue) => normalizeKaraokeWord(miscue.word)) ?? []),
-    [latestTranscription]
-  );
+  const [sessionMiscues, setSessionMiscues] = useState<SessionAudioMiscue[]>([]);
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+  const [showRescan, setShowRescan] = useState(false);
 
-  const ensureOpenSession = useCallback(async () => {
+  const miscueWords = useMemo(
+    () => new Set(sessionMiscues.map((m) => normalizeKaraokeWord(m.word))),
+    [sessionMiscues]
+  );
+  const currentMiscue = sessionMiscues[0] ?? null;
+
+  const ensureSession = async () => {
     if (uuidPattern.test(sessionId)) {
       return sessionId;
     }
 
-    if (sessionRequestRef.current) {
-      return sessionRequestRef.current;
-    }
-
-    sessionRequestRef.current = createSession()
-      .then((session) => {
-        setSessionId(session.id);
-        setChildId(session.childId);
-        return session.id;
-      })
-      .finally(() => {
-        sessionRequestRef.current = null;
-      });
-
-    return sessionRequestRef.current;
-  }, [createSession, sessionId, setSessionId, setChildId]);
-
-  useEffect(() => {
-    if (childId) return;
-    if (!uuidPattern.test(sessionId)) return;
-
     const match = openSessions?.find((session) => session.id === sessionId);
     if (match) {
       setChildId(match.childId);
+      return sessionId;
     }
-  }, [childId, sessionId, openSessions, setChildId]);
 
-  useEffect(() => {
-    if (!childId) return;
-    if (worksheetStatus !== "ocr_complete") return;
-    if (imageKeywords.length === 0) return;
-    if (generatedForTextRef.current === worksheetText) return;
+    const session = await createSession();
+    setSessionId(session.id);
+    setChildId(session.childId);
+    return session.id;
+  };
 
-    generatedForTextRef.current = worksheetText;
-    generateStory({
-      childId,
-      word: imageKeywords[0]
-    });
-  }, [childId, worksheetStatus, imageKeywords, worksheetText, generateStory]);
+  const handleTranscriptionComplete = (result: { miscues: SessionAudioMiscue[] }) => {
+    // Batch, end-of-session correction feedback (per product decision:
+    // simpler than live per-word miscue detection).
+    setSessionMiscues(result.miscues);
+    if (result.miscues.length > 0) {
+      setShowCorrectionModal(true);
+    }
+  };
 
   return (
-    <main className="bg-[linear-gradient(180deg,rgb(255_249_241),rgb(255_240_226))]">
-      <PageContainer className="py-6 sm:py-8">
-        <BrandHeader variant="child" />
+    <div className="min-h-screen bg-[#FDFAF5] text-[#2b2b2b] flex flex-col justify-between font-body">
+      {/* ---------------------------------------------------------------- */}
+      {/* Header                                                          */}
+      {/* ---------------------------------------------------------------- */}
+      <header className="border-b border-[#ecdfc9] bg-white">
+        <div className="mx-auto flex max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] items-center justify-between px-6 py-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt="WonderWord AI" className="h-8 w-auto" />
 
-        <section className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] border border-coral/20 bg-white/88 px-4 py-3 shadow-soft">
-          <div className="min-w-0 text-sm leading-6 text-muted">
-            <p className="truncate font-extrabold text-navy">{auth.email}</p>
-            <p className="text-xs font-black uppercase tracking-[0.12em] text-coral">
-              {auth.role}
+          <nav className="absolute left-1/2 hidden -translate-x-1/2 gap-8 text-sm font-medium text-[#4a4a4a] md:flex">
+            <a href="/child" className="hover:text-[#2b2b2b]">Home</a>
+            <a href="#" className="hover:text-[#2b2b2b]">Story Library</a>
+            <a href="#" className="hover:text-[#2b2b2b]">Store</a>
+            <a href="#" className="hover:text-[#2b2b2b]">Diagnostics</a>
+          </nav>
+
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-600">
+              <span>⭐</span>
+              1,240
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-pink-300" />
+              <span className="text-sm font-medium">{auth.email}</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Main Content                                                    */}
+      {/* ---------------------------------------------------------------- */}
+      <main className="mx-auto w-full max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] px-6 py-16 flex-1 flex flex-col justify-center relative">
+        <div className="w-full animate-fadeIn">
+            <a
+            href="/child"
+            className="flex items-center gap-2 text-[#a3352b] hover:text-[#c03d32] text-lg font-bold font-body mb-6 transition"
+          >
+            <LogOut className="h-5 w-5 transform rotate-180" /> End Session
+          </a>
+
+          <div className="mb-8">
+            <h1 className="text-4xl font-extrabold text-[#2b2b2b] tracking-tight sm:text-5xl font-body">
+              Reading Mode
+            </h1>
+            <p className="mt-2 text-lg text-[#8a8a8a] font-body">
+              Tap &ldquo;Start reading&rdquo; when you&apos;re ready
             </p>
           </div>
-          <SignOutButton />
-        </section>
 
-        <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-          <div className="min-w-0">
-            <StatusBadge tone="child">{isReadingReady ? "Ready to read" : "Worksheet scan"}</StatusBadge>
-            <h1 className="mt-4 font-display text-4xl font-black leading-tight text-navy sm:text-5xl">
-              Reading Session
-            </h1>
-            <p className="mt-3 break-words text-base leading-7 text-muted">
-              Session ID: <span className="font-extrabold text-navy">{sessionId}</span>
-            </p>
-            {isDemoSession ? (
-              <p className="mt-3 rounded-[var(--radius-card)] border border-coral/25 bg-coral/10 px-4 py-3 text-sm font-extrabold leading-6 text-navy">
-                Development only: this child account is temporarily routed to demo-session until real reading sessions are connected.
+          {!worksheetText ? (
+            <div className="rounded-[24px] border border-[#ecdfc9]/60 bg-white p-10 text-center shadow-sm">
+              <p className="text-lg font-extrabold leading-8 text-[#2b2b2b]">
+                Scan a worksheet on the home page first, then come back here to read it.
               </p>
-            ) : null}
-
-            <div className="mt-6 grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
-              <div className="worksheet-lines rounded-[var(--radius-card)] p-1">
-                <WorksheetCapture
-                  status={worksheetStatus}
-                  onStatusChange={setWorksheetStatus}
-                  ensureSession={ensureOpenSession}
-                  onOcrComplete={(result) => {
-                    setKaraokeTimeline(null);
-                    setPlaybackState({
-                      activeIndex: -1,
-                      currentTime: 0,
-                      playbackCompleted: false
-                    });
-                    setLatestTranscription(null);
-                    setOcrResult(result);
-                  }}
+                <a
+                href="/child"
+                className="mt-4 inline-block rounded-full bg-[#ff6868] px-6 py-3 text-sm font-extrabold text-white transition hover:bg-[#ef5353]"
+              >
+                Go to Home
+              </a>
+            </div>
+          ) : (
+            <>
+              {/* Story Text Card */}
+              <div className="bg-white rounded-[24px] p-8 md:p-10 border border-[#ecdfc9]/60 shadow-sm relative mb-8">
+                <span className="text-base font-extrabold text-[#8c584c] block mb-4 font-body">
+                  Story Name
+                </span>
+                <KaraokeText
+                  timeline={karaokeTimeline}
+                  fallbackText={worksheetText}
+                  activeIndex={playbackState.activeIndex}
+                  currentTime={playbackState.currentTime}
+                  playbackCompleted={playbackState.playbackCompleted}
+                  miscueWords={miscueWords}
                 />
               </div>
 
-              <PlaceholderCard
-                title={
-                  <span className="inline-flex gap-2 rounded-full bg-slate-100 p-1">
-                    {READING_PANEL_TABS.map((tab) => (
+              {/* Real recording controls, driving mic + transcription + karaoke */}
+              <div className="mb-8">
+                <ReadingRecorder
+                  sessionId={sessionId}
+                  worksheetText={worksheetText}
+                  ensureSession={ensureSession}
+                  onTimelineChange={setKaraokeTimeline}
+                  onPlaybackChange={setPlaybackState}
+                  onTranscriptionComplete={handleTranscriptionComplete}
+                />
+              </div>
+
+              {/* Rescan */}
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setShowRescan(true)}
+                  className="text-sm font-black text-[#a3352b] underline decoration-dotted"
+                >
+                  Rescan worksheet
+                </button>
+              </div>
+
+              {showRescan ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                  <div className="w-full max-w-lg rounded-[24px] bg-white p-6 shadow-2xl">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h2 className="text-xl font-black text-[#2b2b2b]">Rescan worksheet</h2>
                       <button
-                        key={tab.value}
                         type="button"
-                        onClick={() => setActiveTab(tab.value)}
-                        className={`rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] transition-colors ${
-                          activeTab === tab.value
-                            ? "bg-coral text-white shadow-sm"
-                            : "text-muted hover:text-navy"
-                        }`}
+                        onClick={() => setShowRescan(false)}
+                        className="text-sm font-bold text-[#8a8a8a]"
                       >
-                        {tab.label}
+                        Close
                       </button>
-                    ))}
-                  </span>
-                }
-                className="min-h-[22rem] reading-ruler"
-              >
-                {activeTab === "story" ? (
-                  <>
-                    <StoryTab
-                      storyText={storyResult?.story_text ?? null}
-                      imageUrl={storyResult?.image_url ?? null}
-                      imageStatus={
-                        isGeneratingStory ? "loading" : isStoryError ? "error" : storyResult?.image_url ? "ready" : "empty"
-                      }
-                    />
-                    {isStoryError ? (
-                      <p className="mt-2 text-sm font-bold text-coral">
-                        Story generation failed — try rescanning the worksheet.
-                      </p>
-                    ) : null}
-                  </>
-                ) : worksheetText ? (
-                  <div className="rounded-[var(--radius-card)] bg-white/88 p-5">
-                    <KaraokeText
-                      timeline={karaokeTimeline}
-                      fallbackText={worksheetText}
-                      activeIndex={playbackState.activeIndex}
-                      currentTime={playbackState.currentTime}
-                      playbackCompleted={playbackState.playbackCompleted}
-                      miscueWords={miscueWords}
-                    />
-
-                    {imageKeywords.length > 0 ? (
-                      <div className="mt-5 flex flex-wrap gap-2" aria-label="Image keywords">
-                        {imageKeywords.map((keyword) => (
-                          <span
-                            key={keyword}
-                            className="rounded-full border border-teal/25 bg-teal/10 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-teal"
-                          >
-                            {keyword}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    <button
-                      type="button"
-                      onClick={() => {
+                    </div>
+                    <WorksheetCapture
+                      status={worksheetStatus}
+                      onStatusChange={setWorksheetStatus}
+                      ensureSession={ensureSession}
+                      onOcrComplete={(result) => {
                         setKaraokeTimeline(null);
-                        setPlaybackState({
-                          activeIndex: -1,
-                          currentTime: 0,
-                          playbackCompleted: false
-                        });
-                        setLatestTranscription(null);
-                        clearOcrResult();
-                        generatedForTextRef.current = null;
-                        resetStoryMutation();
+                        setPlaybackState({ activeIndex: -1, currentTime: 0, playbackCompleted: false });
+                        setSessionMiscues([]);
+                        setOcrResult(result);
+                        setShowRescan(false);
                       }}
-                      className="mt-6 min-h-12 rounded-[var(--radius-card)] border border-coral/30 px-4 py-3 text-sm font-black text-coral transition hover:bg-coral/10"
-                    >
-                      Rescan worksheet
-                    </button>
+                    />
                   </div>
-                ) : (
-                  <div className="flex min-h-[17rem] items-center justify-center rounded-[var(--radius-card)] border border-coral/20 bg-white/76 p-6 text-center">
-                    <p className="text-lg font-extrabold leading-8 text-navy">
-                      Your reading text will appear here after the worksheet scan.
-                    </p>
+                </div>
+              ) : null}
+            </>
+          )}
+
+          {/* Batch correction popup — shown after a completed reading pass with miscues */}
+          {showCorrectionModal && currentMiscue ? (
+            <>
+              <div className="fixed inset-0 bg-black/40 z-40" />
+              <div className="fixed left-1/2 top-1/2 z-[48] w-[calc(100%-2rem)] max-w-[440px] -translate-x-1/2 -translate-y-1/2 rounded-[36px] border border-[#ecdfc9] bg-[#f4f7f6] shadow-2xl">
+                <div className="text-center w-full py-6 px-6 bg-[#fff2f2] border-b border-[#ecdfc9]/60 rounded-t-[34px]">
+                  <h2 className="text-[#a3352b] text-3xl font-extrabold font-body">
+                    Oops, let&apos;s try that again!
+                  </h2>
+                  <p className="text-xs font-bold text-[#8a8a8a] mt-1.5 font-body">
+                    You read a different word. No worries!
+                  </p>
+                </div>
+
+                <div className="w-full px-6 pb-6 pt-4 flex flex-col items-center">
+                  <div className="flex justify-center gap-6 w-full mt-2">
+                    <div className="flex flex-col items-center">
+                      <span className="text-xs font-bold text-[#8a8a8a] mb-2 font-body">You said</span>
+                      <span className="bg-[#fbeceb] text-[#a3352b] border border-[#a3352b] text-2xl font-black px-3 py-1 rounded-full font-body">
+                        {currentMiscue.actualPhonemes || "—"}
+                      </span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-xs font-bold text-[#8a8a8a] mb-2 font-body">The word is</span>
+                      <span className="bg-[#ecfbf0] text-[#10a84e] border border-[#10a84e] text-2xl font-black px-3 py-1 rounded-full font-body">
+                        {currentMiscue.word}
+                      </span>
+                    </div>
                   </div>
-                )}
-              </PlaceholderCard>
-            </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSessionMiscues((prev) => prev.slice(1));
+                      if (sessionMiscues.length <= 1) {
+                        setShowCorrectionModal(false);
+                      }
+                    }}
+                    className="bg-black hover:bg-zinc-900 active:scale-95 text-white font-extrabold text-2xl font-body py-3 px-10 rounded-[12px] mt-6 shadow-md transition"
+                  >
+                    {sessionMiscues.length > 1 ? "Next →" : "Done"}
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
+      </main>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Footer                                                           */}
+      {/* ---------------------------------------------------------------- */}
+      <footer className="border-t border-[#f0e6d8] bg-white py-8">
+        <div className="mx-auto flex max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] flex-col items-center justify-between gap-4 px-6 text-sm text-[#8a8a8a] md:flex-row">
+          <div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="WonderWord AI" className="h-6 w-auto opacity-80" />
+            <p className="ml-1">© 2026 WonderWord AI.</p>
           </div>
-
-          <aside className="grid content-start gap-5">
-            <ReadingRecorder
-              sessionId={sessionId}
-              worksheetText={worksheetText}
-              ensureSession={ensureOpenSession}
-              onTimelineChange={setKaraokeTimeline}
-              onPlaybackChange={(state) => {
-                setPlaybackState(state);
-                setActiveWordIndex(state.activeIndex);
-              }}
-              onTranscriptionComplete={setLatestTranscription}
-            />
-            <section className="rounded-[var(--radius-card)] border border-coral/25 bg-white p-5 shadow-soft">
-              <h2 className="text-lg font-black text-navy">Session</h2>
-              <button
-                type="button"
-                disabled
-                className="min-h-12 w-full cursor-not-allowed rounded-[var(--radius-card)] border border-slate-200 px-5 text-sm font-extrabold text-slate-500"
-              >
-                End Session
-              </button>
-            </section>
-
-            <section className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-              {sessionMetrics.map((metric) => (
-                <MetricCard key={metric} label={metric} tone="child" />
-              ))}
-            </section>
-          </aside>
-        </section>
-      </PageContainer>
-    </main>
+          <div className="flex gap-5">
+            <a href="#" className="hover:text-[#2b2b2b]">Privacy</a>
+            <a href="/terms" className="hover:text-[#2b2b2b]">Terms</a>
+            <a href="#" className="hover:text-[#2b2b2b]">Support</a>
+            <a href="#" className="hover:text-[#2b2b2b]">About Us</a>
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }

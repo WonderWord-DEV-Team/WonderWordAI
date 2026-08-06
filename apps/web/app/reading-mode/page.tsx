@@ -304,7 +304,7 @@ export default function ReadingModePage() {
                     <div className="absolute left-1/2 -translate-x-1/2 bottom-[105%] bg-white border border-[#ecdfc9] rounded-[16px] w-[158px] h-[71px] shadow-md text-[11px] leading-tight text-[#2b2b2b] font-body font-bold flex items-center justify-center p-3 text-center z-30 animate-fade-in -rotate-[0.43deg]">
                       {/* Tail of the bubble pointing down */}
                       <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-r border-b border-[#ecdfc9]/80 rotate-45" />
-                      You're doing great, Emma! Keep going! 🌟
+                      You’re doing great, Emma! Keep going! 🌟
                     </div>
                   )}
                 </div>
@@ -343,7 +343,7 @@ export default function ReadingModePage() {
                     {/* Title & Subtitle with Header Background Band */}
                     <div className="text-center w-full py-6 px-6 bg-[#fff2f2] border-b border-[#ecdfc9]/60 rounded-t-[34px]">
                       <h2 className="text-[#a3352b] text-3xl font-extrabold font-body">
-                        Oops, let's try that again!
+                        Oops, let’s try that again!
                       </h2>
                       <p className="text-xs font-bold text-[#8a8a8a] mt-1.5 font-body">
                         You read a different word. No worries!
@@ -425,10 +425,10 @@ export default function ReadingModePage() {
                     {/* Title & Subtitle with Header Background Band */}
                     <div className="text-center w-full py-6 px-6 bg-[#fff2f2] border-b border-[#ecdfc9]/60 rounded-t-[10px]">
                       <h2 className="text-[#a3352b] text-3xl font-extrabold font-body">
-                        Let's practice
+                        Let’s practice
                       </h2>
                       <p className="text-xs font-bold text-[#8a8a8a] mt-1.5 font-body">
-                        Let's practice reading <strong className="text-[#10a84e] font-black">grass</strong>
+                        Let’s practice reading <strong className="text-[#10a84e] font-black">grass</strong>
                       </p>
                     </div>
 
