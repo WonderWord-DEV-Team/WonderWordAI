@@ -1,14 +1,22 @@
 import Stripe from "stripe";
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("Missing STRIPE_SECRET_KEY environment variable");
-}
-
 /**
  * Server-only Stripe client. Never import this file from a "use client"
  * component — the secret key must never reach the browser bundle.
  */
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2026-06-24.dahlia",
-  typescript: true,
-});
+let stripeClient: Stripe | null = null;
+
+export function getStripeClient() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+
+  if (!secretKey) {
+    throw new Error("Missing STRIPE_SECRET_KEY environment variable");
+  }
+
+  stripeClient ??= new Stripe(secretKey, {
+    apiVersion: "2026-06-24.dahlia",
+    typescript: true,
+  });
+
+  return stripeClient;
+}

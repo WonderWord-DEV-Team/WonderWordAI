@@ -7,8 +7,9 @@
 import fs from "fs";
 import path from "path";
 
+const runLiveApiTests = process.env.RUN_LIVE_API_TESTS === "true";
 const envPath = path.resolve(__dirname, "../.env.local");
-if (fs.existsSync(envPath)) {
+if (runLiveApiTests && fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, "utf-8");
   envContent.split("\n").forEach((line) => {
     const trimmed = line.trim();
@@ -33,7 +34,9 @@ vi.mock("next/headers", () => ({
     set: () => { }
   })
 }));
-describe("Live Flow Verification", () => {
+const describeLive = runLiveApiTests ? describe : describe.skip;
+
+describeLive("Live Flow Verification", () => {
   it("runs the live image pipeline directly against real APIs and local Supabase Storage", async () => {
     const { searchUnsplash } = await import("@/lib/illustrations/unsplash/client");
     const { generateDalleImage } = await import("@/lib/illustrations/dalle/client");

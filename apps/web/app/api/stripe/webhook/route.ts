@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { stripe } from "@/lib/stripe/server";
+import { getStripeClient } from "@/lib/stripe/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
 // Route handlers don't parse the body by default — request.text() below
@@ -14,6 +14,8 @@ export async function POST(request: Request) {
   if (!signature || !process.env.STRIPE_WEBHOOK_SECRET) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
+
+  const stripe = getStripeClient();
 
   let event: Stripe.Event;
   try {

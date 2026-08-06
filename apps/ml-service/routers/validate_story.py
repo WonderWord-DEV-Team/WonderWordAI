@@ -52,6 +52,34 @@ def _tokenize(text: str) -> list[str]:
     return re.findall(r"[a-zA-Z']+", text.lower())
 
 
+def _count_syllables(word: str) -> int:
+    normalized = re.sub(r"[^a-z]", "", word.lower())
+    if not normalized:
+        return 0
+
+    groups = re.findall(r"[aeiouy]+", normalized)
+    count = len(groups)
+
+    if normalized.endswith("e") and count > 1:
+        count -= 1
+
+    return max(count, 1)
+
+
+def _fallback_flesch_kincaid_grade(story_text: str) -> float:
+    words = _tokenize(story_text.replace(VISUAL_MARKER, " "))
+    sentences = [s for s in re.split(r"[.!?]+", story_text) if s.strip()]
+
+    if not words or not sentences:
+        return 0.0
+
+    syllables = sum(_count_syllables(word) for word in words)
+    words_per_sentence = len(words) / len(sentences)
+    syllables_per_word = syllables / len(words)
+
+    return (0.39 * words_per_sentence) + (11.8 * syllables_per_word) - 15.59
+
+
 def check_vocabulary(story_text: str, word: str, known_words: list[str]) -> GuardrailResult:
     known_set = {w.lower() for w in known_words}
     target = word.lower()
@@ -68,7 +96,10 @@ def check_vocabulary(story_text: str, word: str, known_words: list[str]) -> Guar
 
 
 def check_complexity(story_text: str) -> GuardrailResult:
-    grade = textstat.flesch_kincaid_grade(story_text)
+    try:
+        grade = textstat.flesch_kincaid_grade(story_text)
+    except LookupError:
+        grade = _fallback_flesch_kincaid_grade(story_text)
 
     if grade >= MAX_GRADE_LEVEL:
         return False, [f"complexity: Flesch-Kincaid grade {grade:.1f} exceeds limit of {MAX_GRADE_LEVEL:.1f}"]
