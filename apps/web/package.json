@@ -6,8 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit --project tsconfig.typecheck.json",
     "test": "vitest run",
+    "test:live": "if [ \"$RUN_LIVE_API_TESTS\" != \"true\" ]; then echo \"Skipping live API tests: set RUN_LIVE_API_TESTS=true to run.\"; else vitest run --config vitest.live.config.ts; fi",
     "test:auth": "tsc --module commonjs --target es2022 --moduleResolution node --esModuleInterop --skipLibCheck --strict --noEmit false --outDir .test-output --rootDir . lib/supabase/middleware.test.ts lib/supabase/middleware-policy.ts lib/supabase/middleware-cookies.ts lib/auth/types.ts && node .test-output/lib/supabase/middleware.test.js",
     "test:karaoke": "tsc --module commonjs --target es2022 --moduleResolution node --esModuleInterop --skipLibCheck --strict --noEmit false --outDir .test-output --rootDir . lib/karaoke/timeline.test.ts lib/karaoke/timeline.ts lib/audio/schema.ts && node .test-output/lib/karaoke/timeline.test.js",
     "test:narration": "tsc --module commonjs --target es2022 --moduleResolution node --esModuleInterop --skipLibCheck --strict --noEmit false --outDir .test-output --rootDir . lib/narration/pipeline.test.ts lib/narration/pipeline.ts lib/narration/schema.ts && node .test-output/lib/narration/pipeline.test.js"

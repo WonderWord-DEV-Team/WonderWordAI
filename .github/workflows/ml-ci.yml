@@ -19,6 +19,7 @@ jobs:
           filters: |
             ml:
               - 'apps/ml-service/**'
+              - '.github/workflows/ml-ci.yml'
 
   test:
     name: Lint and Pytest
@@ -32,13 +33,17 @@ jobs:
         with:
           python-version: '3.11.11'
       - name: Install dependencies
+        working-directory: apps/ml-service
         run: |
-          cd apps/ml-service
-          echo "Installing python dependencies from requirements.txt or poetry..."
-      - name: Run Linter and Tests
-        run: |
-          cd apps/ml-service
-          echo "Running ruff/black and pytest..."
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pytest
+      - name: Run deterministic pytest suite
+        working-directory: apps/ml-service
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+          SENTENCE_TRANSFORMERS_HOME: /tmp/sentence-transformers-cache
+        run: python -m pytest tests
 
   test-skip:
     name: Lint and Pytest

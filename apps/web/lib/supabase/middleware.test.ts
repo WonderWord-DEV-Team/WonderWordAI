@@ -44,7 +44,7 @@ test("authenticated children and parents are routed by role", () => {
   );
   assert.deepEqual(
     classifyMiddlewareRequest("/parent/dashboard", { status: "authenticated", role: "CHILD" }),
-    { kind: "redirect", pathname: "/child/demo-session/read" }
+    { kind: "redirect", pathname: "/child" }
   );
   assert.deepEqual(
     classifyMiddlewareRequest("/child/demo-session/read", { status: "authenticated", role: "PARENT" }),

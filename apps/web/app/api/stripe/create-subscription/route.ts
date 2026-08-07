@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe/server";
+import { getStripeClient } from "@/lib/stripe/server";
 import { getPriceId, type PlanId, type BillingInterval } from "@/lib/stripe/plans";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export async function POST(request: Request) {
   try {
+    const stripe = getStripeClient();
     const { plan, interval } = (await request.json()) as {
       plan: PlanId;
       interval: BillingInterval;

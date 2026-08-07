@@ -86,6 +86,37 @@ vi.mock("../../lib/stories/client", () => ({
   }))
 }));
 
+vi.mock("@/lib/stories/validate-client", () => ({
+  StoryValidationUpstreamError: class StoryValidationUpstreamError extends Error {
+    code = "internal_error";
+    status = 500;
+  },
+  validateStoryWithGuardrails: vi.fn().mockResolvedValue({
+    is_valid: true,
+    validation_score: 95,
+    errors: [],
+    guardrails: {
+      vocabulary: "passed",
+      complexity: "passed",
+      content_safety: "passed",
+      structure: "passed"
+    }
+  })
+}));
+
+vi.mock("@/lib/phonics/client", () => ({
+  PhonicsUpstreamError: class PhonicsUpstreamError extends Error {
+    constructor(
+      public code: string,
+      message: string,
+      public status: number
+    ) {
+      super(message);
+    }
+  },
+  lookupPhonicsRule: vi.fn().mockResolvedValue({ matches: [] })
+}));
+
 // Mock OpenAI generation client so it doesn't make real external calls
 const mockOpenaiGenerate = vi.fn().mockResolvedValue({
   data: [{ b64_json: "mocked_base64_data_dalle_image" }]
