@@ -18,6 +18,31 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
+## Tests
+
+Safe deterministic checks do not call OpenAI, Anthropic, Unsplash, production Supabase, Stripe, or
+other paid services:
+
+```bash
+npm run test
+npm run test:auth
+npm run test:karaoke
+npm run test:narration
+npm run typecheck
+npm run lint
+npm run build
+```
+
+Live API tests are isolated behind an explicit flag and are skipped by default:
+
+```bash
+npm run test:live
+RUN_LIVE_API_TESTS=true npm run test:live
+```
+
+Only run live tests with synthetic data and disposable local artifacts. Do not persist raw child
+audio or worksheet images.
+
 ## Reading Session API
 
 The web app exposes authenticated reading-session routes backed by `public.reading_sessions`.
