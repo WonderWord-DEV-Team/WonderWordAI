@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
+import { ReadingResultsShell } from "@/components/child/ReadingResultsShell";
 import { requireRole } from "@/lib/auth/server";
-import ReadingModeClient from "./ReadingModeClient";
 
 export const metadata: Metadata = {
-  title: "Reading Mode"
+  title: "Reading Results"
 };
 
 export const dynamic = "force-dynamic";
 
-export default async function ReadingModePage() {
+export default async function ChildResultsPage() {
   const auth = await requireRole("CHILD");
-  return <ReadingModeClient auth={auth} />;
+  return <ReadingResultsShell auth={auth} />;
 }

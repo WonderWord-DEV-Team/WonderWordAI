@@ -13,6 +13,7 @@ from routers.activity_recommendation import router as activity_recommendation_ro
 from routers.validate_story import router as validate_story_router  # ADDED
 from services.embedding_service import embedding_model
 from config import SENTRY_DSN  # ADDED
+from routers.word_definition import router as word_definition_router
 
 # ADDED — initialize Sentry once at import time, guarded by env var
 if SENTRY_DSN:
@@ -40,3 +41,5 @@ app.include_router(router)
 app.include_router(phonics_router)
 app.include_router(activity_recommendation_router)
 app.include_router(validate_story_router) 
+
+app.include_router(word_definition_router)

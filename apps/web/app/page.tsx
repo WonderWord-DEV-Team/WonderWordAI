@@ -113,6 +113,15 @@ const questions = [
   "Do I need any special equipment?",
 ];
 
+const storyWorlds = [
+  { name: "Space", color: "#2260e6", emoji: "🚀", cta: "Blast off →" },
+  { name: "Dinos", color: "#10a84e", emoji: "🦕", cta: "Roar in →" },
+  { name: "Fairy Tale", color: "#d2237d", emoji: "🏰", cta: "Believe →" },
+  { name: "Heroes", color: "#e65100", emoji: "🦸", cta: "Save day →" },
+  { name: "Food", color: "#6b21a8", emoji: "🍕", cta: "Taste it →" },
+  { name: "Animals", color: "#e6a100", emoji: "🐾", cta: "Meet them →" },
+];
+
 export default function Home() {
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
@@ -232,6 +241,29 @@ export default function Home() {
               )}
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Choose Your Adventure */}
+      <section className="px-6 sm:px-12 py-20 bg-gradient-to-b from-[#FFF9F2] to-[#FFF0E6]">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-center text-[32px] font-black text-[#1A1A2E]">Choose Your Adventure!</h2>
+          <p className="mt-2 text-center text-[15px] text-gray-500">Every story is built from your imagination — pick a world!</p>
+
+          <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            {storyWorlds.map((world) => (
+              <button
+                key={world.name}
+                type="button"
+                className="group flex flex-col items-center gap-3 rounded-2xl p-5 text-white transition hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2"
+                style={{ backgroundColor: world.color }}
+              >
+                <span className="text-3xl">{world.emoji}</span>
+                <span className="text-sm font-black text-center">{world.name}</span>
+                <span className="text-[11px] font-bold mt-1 text-white/90 group-hover:text-white">{world.cta}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 

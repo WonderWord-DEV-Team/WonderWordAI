@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { useChildReport } from "@/hooks/useChildReport";
 import { useParentDashboard } from "@/hooks/useParentDashboard";
@@ -438,10 +439,11 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
             WonderWord AI
           </div>
           <nav className="hidden items-center gap-8 text-sm font-medium text-slate-500 md:flex">
-            <a href="#" className="hover:text-slate-900">Home</a>
-            <a href="#" className="hover:text-slate-900">Story Library</a>
+            <Link href="/" className="hover:text-slate-900">Home</Link>
+            <Link href="/explorer" className="font-semibold text-rose-500 hover:text-rose-600">Word Tools</Link>
+            <Link href="/parent/story-library" className="hover:text-slate-900">Story Library</Link>
             <a href="#" className="hover:text-slate-900">Store</a>
-            <a href="#" className="font-semibold text-rose-500">Diagnostics</a>
+            <a href="#" className="hover:text-slate-900">Diagnostics</a>
           </nav>
           <div className="flex items-center gap-4">
             <div className="hidden text-right text-xs leading-5 text-slate-500 sm:block">
@@ -482,6 +484,23 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
           </span>
         </div>
 
+        <section className="mt-6 rounded-2xl border border-rose-200 bg-[#FFF6EE] p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Word Tools</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Open the word explorer to look up meanings, practice new vocabulary, and keep reading fun.
+              </p>
+            </div>
+            <Link
+              href="/explorer"
+              className="inline-flex items-center rounded-full bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600"
+            >
+              Open Word Tools
+            </Link>
+          </div>
+        </section>
+
         {dashboardQuery.isLoading ? (
           <DashboardMessage
             title="Loading dashboard"
@@ -493,7 +512,7 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
             description={
               dashboardQuery.error instanceof Error
                 ? dashboardQuery.error.message
-                : "Unable to load the parent dashboard."
+                : "The dashboard data could not be loaded right now. Your account is still signed in, and you can try again shortly."
             }
             tone="error"
           />

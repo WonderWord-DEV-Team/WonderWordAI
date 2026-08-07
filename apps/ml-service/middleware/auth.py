@@ -1,3 +1,5 @@
+import secrets
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
@@ -8,6 +10,7 @@ PROTECTED_PATHS = {
     "/transcribe",
     "/detect-miscue",
     "/activity-recommendation",
+    "/phonics-lookup",
     "/narrate",
     "/validate-story",
 }
@@ -21,9 +24,14 @@ def _unauthorized_response():
 
 
 async def _authenticate(request, call_next):
-    if request.url.path in PROTECTED_PATHS:
+    path = request.url.path.rstrip("/") or "/"
+    if path in PROTECTED_PATHS:
         internal_key = request.headers.get("X-Internal-Key")
-        if not ML_SERVICE_KEY or internal_key != ML_SERVICE_KEY:
+        if (
+            not ML_SERVICE_KEY
+            or not internal_key
+            or not secrets.compare_digest(internal_key, ML_SERVICE_KEY)
+        ):
             return _unauthorized_response()
     return await call_next(request)
 

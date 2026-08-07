@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { LogOut, Volume2, Mic } from "lucide-react";
 import { useChildSession } from "@/components/child/ChildSessionContext";
 import { KaraokeText } from "@/components/child/KaraokeText";
@@ -9,7 +10,7 @@ import { WorksheetCapture } from "@/components/worksheet/WorksheetCapture";
 import { useCreateSession, useOpenSessions } from "@/hooks/useSessions";
 import type { AuthContext } from "@/lib/auth/types";
 import { normalizeKaraokeWord, type KaraokeTimeline } from "@/lib/karaoke/timeline";
-import type { SessionAudioMiscue } from "@/lib/audio/schema";
+import type { SessionAudioData, SessionAudioMiscue } from "@/lib/audio/schema";
 
 type ChildReadingShellProps = {
   auth: AuthContext;
@@ -18,6 +19,7 @@ type ChildReadingShellProps = {
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function ChildReadingShell({ auth }: ChildReadingShellProps) {
+  const router = useRouter();
   const {
     sessionId,
     setSessionId,
@@ -26,7 +28,8 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
     worksheetText,
     worksheetStatus,
     setWorksheetStatus,
-    setOcrResult
+    setOcrResult,
+    setLatestTranscription
   } = useChildSession();
   const { data: openSessions } = useOpenSessions();
   const { mutateAsync: createSession } = useCreateSession();
@@ -40,6 +43,7 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
   const [sessionMiscues, setSessionMiscues] = useState<SessionAudioMiscue[]>([]);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [showRescan, setShowRescan] = useState(false);
+  const [hasResults, setHasResults] = useState(false);
 
   const miscueWords = useMemo(
     () => new Set(sessionMiscues.map((m) => normalizeKaraokeWord(m.word))),
@@ -64,13 +68,19 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
     return session.id;
   };
 
-  const handleTranscriptionComplete = (result: { miscues: SessionAudioMiscue[] }) => {
+  const handleTranscriptionComplete = (result: SessionAudioData) => {
     // Batch, end-of-session correction feedback (per product decision:
     // simpler than live per-word miscue detection).
+    setLatestTranscription(result);
     setSessionMiscues(result.miscues);
+    setHasResults(true);
     if (result.miscues.length > 0) {
       setShowCorrectionModal(true);
     }
+  };
+
+  const goToResults = () => {
+    router.push(`/child/${sessionId}/results`);
   };
 
   return (
@@ -165,6 +175,19 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
                 />
               </div>
 
+              {/* Once a reading pass finishes, let the child jump to their results */}
+              {hasResults ? (
+                <div className="flex justify-center mb-4">
+                  <button
+                    type="button"
+                    onClick={goToResults}
+                    className="rounded-full bg-[#0F9C8E] hover:bg-[#0d8478] px-8 py-3 text-base font-black text-white shadow-sm transition"
+                  >
+                    See my results →
+                  </button>
+                </div>
+              ) : null}
+
               {/* Rescan */}
               <div className="flex justify-center">
                 <button
@@ -197,6 +220,7 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
                         setKaraokeTimeline(null);
                         setPlaybackState({ activeIndex: -1, currentTime: 0, playbackCompleted: false });
                         setSessionMiscues([]);
+                        setHasResults(false);
                         setOcrResult(result);
                         setShowRescan(false);
                       }}
@@ -240,10 +264,12 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
                   <button
                     type="button"
                     onClick={() => {
-                      setSessionMiscues((prev) => prev.slice(1));
                       if (sessionMiscues.length <= 1) {
                         setShowCorrectionModal(false);
+                        goToResults();
+                        return;
                       }
+                      setSessionMiscues((prev) => prev.slice(1));
                     }}
                     className="bg-black hover:bg-zinc-900 active:scale-95 text-white font-extrabold text-2xl font-body py-3 px-10 rounded-[12px] mt-6 shadow-md transition"
                   >

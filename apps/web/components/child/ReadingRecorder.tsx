@@ -38,7 +38,8 @@
     onTranscriptionComplete: (result: SessionAudioData) => void;
   };
 
-  const MAX_RECORDING_MS = 30_000;
+  // Hard recording cap temporarily disabled per request — re-enable before launch.
+  const MAX_RECORDING_MS = 30 * 60_000;
 
   export function ReadingRecorder({
     sessionId,
@@ -55,6 +56,7 @@
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const animationFrameRef = useRef<number | null>(null);
     const recordingLimitRef = useRef<number | null>(null);
+    const stopSafetyTimeoutRef = useRef<number | null>(null);
     const playbackButtonRef = useRef<HTMLButtonElement | null>(null);
     const timelineRef = useRef<KaraokeTimeline | null>(null);
     const isMountedRef = useRef(true);
@@ -132,6 +134,13 @@
       }
     }, []);
 
+    const clearStopSafetyTimeout = useCallback(() => {
+      if (stopSafetyTimeoutRef.current !== null) {
+        window.clearTimeout(stopSafetyTimeoutRef.current);
+        stopSafetyTimeoutRef.current = null;
+      }
+    }, []);
+
     const stopStream = useCallback(() => {
       stopMediaStreamTracks(streamRef.current);
       streamRef.current = null;
@@ -169,6 +178,7 @@
         shouldSubmitRecordingRef.current = false;
         cancelAnimationFrameLoop();
         clearRecordingLimit();
+        clearStopSafetyTimeout();
         if (recorderRef.current?.state === "recording") {
           recorderRef.current.stop();
         }
@@ -176,16 +186,64 @@
         stopStream();
         revokeObjectUrl();
       };
-    }, [cancelAnimationFrameLoop, clearRecordingLimit, revokeObjectUrl, stopStream]);
+    }, [cancelAnimationFrameLoop, clearRecordingLimit, clearStopSafetyTimeout, revokeObjectUrl, stopStream]);
 
+    const forceStopCleanup = useCallback(
+      (errorMessage: string) => {
+        clearStopSafetyTimeout();
+        shouldSubmitRecordingRef.current = false;
+        chunksRef.current = [];
+        stopStream();
+        recorderRef.current = null;
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        setRecordingState("error");
+        setMessage(errorMessage);
+      },
+      [clearStopSafetyTimeout, stopStream]
+    );
+
+    // Rely on the recorder's own state rather than React state so Stop always
+    // works even if a render was missed, and add a safety-net timeout in case
+    // the browser never fires `onstop` (observed on some Android/WebView builds).
     const stopRecording = useCallback(() => {
-      if (recordingState !== "recording") {
+      const recorder = recorderRef.current;
+      // eslint-disable-next-line no-console
+      console.log("[ReadingRecorder] stopRecording clicked, recorder state:", recorder?.state);
+
+      if (!recorder || recorder.state === "inactive") {
         return;
       }
 
       clearRecordingLimit();
-      recorderRef.current?.stop();
-    }, [clearRecordingLimit, recordingState]);
+
+      // Update the UI immediately so the click always feels responsive, even
+      // though the actual stop/upload flow finishes asynchronously in onstop.
+      setRecordingState("processing");
+      setMessage("Stopping the recording...");
+
+      try {
+        recorder.stop();
+        // eslint-disable-next-line no-console
+        console.log("[ReadingRecorder] recorder.stop() called successfully");
+      } catch (stopError) {
+        // eslint-disable-next-line no-console
+        console.log("[ReadingRecorder] recorder.stop() threw", stopError);
+        forceStopCleanup("The microphone stopped unexpectedly. Please try again.");
+        return;
+      }
+
+      clearStopSafetyTimeout();
+      stopSafetyTimeoutRef.current = window.setTimeout(() => {
+        if (!shouldSubmitRecordingRef.current) {
+          return;
+        }
+        forceStopCleanup("Recording could not be stopped cleanly. Please try again.");
+      }, 4000);
+    }, [clearRecordingLimit, clearStopSafetyTimeout, forceStopCleanup]);
 
     const handleStartRecording = async () => {
       if (!canStartRecording) {
@@ -245,6 +303,9 @@
         };
 
         recorder.onstop = () => {
+          // eslint-disable-next-line no-console
+          console.log("[ReadingRecorder] recorder.onstop fired, shouldSubmit:", shouldSubmitRecordingRef.current);
+
           if (!shouldSubmitRecordingRef.current) {
             return;
           }
@@ -272,6 +333,7 @@
 
     const handleRecordingStopped = async (nextSessionId: string, mimeType: string) => {
       clearRecordingLimit();
+      clearStopSafetyTimeout();
       stopStream();
       recorderRef.current = null;
       shouldSubmitRecordingRef.current = false;
@@ -280,28 +342,41 @@
       chunksRef.current = [];
 
       if (audioBlob.size === 0) {
-        if (!isMountedRef.current) {
-          return;
+        // eslint-disable-next-line no-console
+        console.log("[ReadingRecorder] no audio captured, chunks were empty");
+
+        if (isMountedRef.current) {
+          setRecordingState("error");
+          setMessage("No reading audio was captured. Please try again.");
         }
-
-        setRecordingState("error");
-        setMessage("No reading audio was captured. Please try again.");
         return;
       }
 
-      if (!isMountedRef.current) {
-        return;
+      if (isMountedRef.current) {
+        setRecordingState("processing");
+        setMessage("Listening back to your reading...");
       }
+      // eslint-disable-next-line no-console
+      console.log(
+        "[ReadingRecorder] uploading audio, size:",
+        audioBlob.size,
+        "type:",
+        audioBlob.type,
+        "mounted:",
+        isMountedRef.current
+      );
 
-      setRecordingState("processing");
-      setMessage("Listening back to your reading...");
-
+      // Always attempt the upload, even if this component instance is no
+      // longer mounted (e.g. a stray remount) — losing captured audio silently
+      // is worse than a skipped UI update.
       try {
         const result = await uploadSessionAudio({
           sessionId: nextSessionId,
           audio: audioBlob,
           referenceText: worksheetText
         });
+        // eslint-disable-next-line no-console
+        console.log("[ReadingRecorder] upload succeeded", result);
         const timeline = buildKaraokeTimeline({
           worksheetText: worksheetText ?? "",
           audio: result
@@ -348,6 +423,9 @@
           window.setTimeout(() => playbackButtonRef.current?.focus(), 0);
         }
       } catch (error) {
+        // eslint-disable-next-line no-console
+        console.log("[ReadingRecorder] upload/transcription failed", error);
+
         if (!isMountedRef.current) {
           return;
         }

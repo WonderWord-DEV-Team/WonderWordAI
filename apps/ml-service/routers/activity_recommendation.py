@@ -7,10 +7,7 @@ from services.supabase_service import get_supabase_client
 
 router = APIRouter()
 
-# ticket: integrate playful practice recommendations into parent dashboard
-# per docs/api-contract.md, unknown/missing categories must still return 200
-# with this fallback activity instead of a 404, so the parent dashboard never
-# has to show an error state
+
 FALLBACK_ACTIVITY = {
     "title": "Word Detective",
     "description": (
@@ -78,5 +75,5 @@ async def activity_recommendation(
 
         return result.data[0]
     except Exception:
-        # keep the dashboard from ever erroring, even if the lookup itself fails
+        
         return FALLBACK_ACTIVITY
