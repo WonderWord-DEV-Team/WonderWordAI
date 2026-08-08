@@ -25,7 +25,16 @@ const STORY_WORLDS: StoryWorld[] = [
   { name: "Animals", color: "#e6a100", emoji: "🐾" }
 ];
 
-const DAILY_REFRESH_CARDS = [
+type DailyRefreshCard = {
+  title: string;
+  description: string;
+  accent: string;
+  textAccent: string;
+  href: string | null;
+  action?: "read-aloud";
+};
+
+const DAILY_REFRESH_CARDS: DailyRefreshCard[] = [
   {
     title: "Word Beats",
     description: "Turn any word into a song!",
@@ -52,7 +61,8 @@ const DAILY_REFRESH_CARDS = [
     description: "Practice reading with Wonder!",
     accent: "bg-[#ece1fb]",
     textAccent: "text-[#6b21a8]",
-    href: null as string | null
+    href: null,
+    action: "read-aloud"
   }
 ];
 
@@ -114,6 +124,11 @@ export default function ChildHomePage() {
   const handleOcrComplete = (result: { sessionId: string; text: string; imageKeywords: string[] }) => {
     setOcrResult(result);
     router.push(`/child/${result.sessionId}/read`);
+  };
+
+  const handleStartReadAloud = async () => {
+    const id = await ensureSession();
+    router.push(`/child/${id}/read`);
   };
 
   return (
@@ -260,6 +275,17 @@ export default function ChildHomePage() {
                   <p className="mt-1 text-sm leading-6 text-[#2b2b2b]/80">{card.description}</p>
                   <span className="mt-3 inline-block text-xs font-black text-[#2b2b2b]/60">⭐ Earn 20</span>
                 </Link>
+              ) : card.action === "read-aloud" ? (
+                <button
+                  key={card.title}
+                  type="button"
+                  onClick={handleStartReadAloud}
+                  className={`rounded-2xl ${card.accent} p-5 text-left shadow-sm transition hover:scale-[1.02]`}
+                >
+                  <h3 className={`font-black ${card.textAccent}`}>{card.title}</h3>
+                  <p className="mt-1 text-sm leading-6 text-[#2b2b2b]/80">{card.description}</p>
+                  <span className="mt-3 inline-block text-xs font-black text-[#2b2b2b]/60">⭐ Earn 20</span>
+                </button>
               ) : (
                 <div
                   key={card.title}

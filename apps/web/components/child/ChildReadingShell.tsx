@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut, Volume2, Mic } from "lucide-react";
 import { useChildSession } from "@/components/child/ChildSessionContext";
+import CorrectionModal from "@/components/child/CorrectionModal";
 import { KaraokeText } from "@/components/child/KaraokeText";
 import { ReadingRecorder } from "@/components/child/ReadingRecorder";
 import { WorksheetCapture } from "@/components/worksheet/WorksheetCapture";
@@ -231,53 +232,18 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
             </>
           )}
 
-          {/* Batch correction popup — shown after a completed reading pass with miscues */}
+          {/* Correction modal popup — shown after a completed reading pass with miscues */}
           {showCorrectionModal && currentMiscue ? (
-            <>
-              <div className="fixed inset-0 bg-black/40 z-40" />
-              <div className="fixed left-1/2 top-1/2 z-[48] w-[calc(100%-2rem)] max-w-[440px] -translate-x-1/2 -translate-y-1/2 rounded-[36px] border border-[#ecdfc9] bg-[#f4f7f6] shadow-2xl">
-                <div className="text-center w-full py-6 px-6 bg-[#fff2f2] border-b border-[#ecdfc9]/60 rounded-t-[34px]">
-                  <h2 className="text-[#a3352b] text-3xl font-extrabold font-body">
-                    Oops, let&apos;s try that again!
-                  </h2>
-                  <p className="text-xs font-bold text-[#8a8a8a] mt-1.5 font-body">
-                    You read a different word. No worries!
-                  </p>
-                </div>
-
-                <div className="w-full px-6 pb-6 pt-4 flex flex-col items-center">
-                  <div className="flex justify-center gap-6 w-full mt-2">
-                    <div className="flex flex-col items-center">
-                      <span className="text-xs font-bold text-[#8a8a8a] mb-2 font-body">You said</span>
-                      <span className="bg-[#fbeceb] text-[#a3352b] border border-[#a3352b] text-2xl font-black px-3 py-1 rounded-full font-body">
-                        {currentMiscue.actualPhonemes || "—"}
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-xs font-bold text-[#8a8a8a] mb-2 font-body">The word is</span>
-                      <span className="bg-[#ecfbf0] text-[#10a84e] border border-[#10a84e] text-2xl font-black px-3 py-1 rounded-full font-body">
-                        {currentMiscue.word}
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (sessionMiscues.length <= 1) {
-                        setShowCorrectionModal(false);
-                        goToResults();
-                        return;
-                      }
-                      setSessionMiscues((prev) => prev.slice(1));
-                    }}
-                    className="bg-black hover:bg-zinc-900 active:scale-95 text-white font-extrabold text-2xl font-body py-3 px-10 rounded-[12px] mt-6 shadow-md transition"
-                  >
-                    {sessionMiscues.length > 1 ? "Next →" : "Done"}
-                  </button>
-                </div>
-              </div>
-            </>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <CorrectionModal
+                storyText={worksheetText ?? ""}
+                miscues={sessionMiscues}
+                onDone={() => {
+                  setShowCorrectionModal(false);
+                  goToResults();
+                }}
+              />
+            </div>
           ) : null}
         </div>
       </main>

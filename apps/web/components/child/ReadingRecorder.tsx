@@ -371,10 +371,31 @@
       // is worse than a skipped UI update.
       try {
         const result = await uploadSessionAudio({
-          sessionId: nextSessionId,
-          audio: audioBlob,
-          referenceText: worksheetText
-        });
+  sessionId: nextSessionId,
+  audio: audioBlob,
+  referenceText: worksheetText,
+});
+
+console.log(
+  "[ReadingRecorder] ML RESULT:",
+  JSON.stringify(result, null, 2)
+);
+
+console.log(
+  "[ReadingRecorder] MISCUE COUNT:",
+  result.miscues.length
+);
+
+console.log(
+  "[ReadingRecorder] MISCUES:",
+  result.miscues
+);
+
+console.log(
+  "[ReadingRecorder] Calling onTranscriptionComplete..."
+);
+
+onTranscriptionComplete(result);
         // eslint-disable-next-line no-console
         console.log("[ReadingRecorder] upload succeeded", result);
         const timeline = buildKaraokeTimeline({

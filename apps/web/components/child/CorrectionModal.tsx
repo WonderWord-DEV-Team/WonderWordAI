@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { SessionAudioMiscue } from "@/lib/audio/schema";
 
 type Tab = "story" | "phonics" | "listen" | "practice";
 
@@ -11,16 +12,58 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "practice", label: "Practice" },
 ];
 
-export default function CorrectionModal() {
+type CorrectionModalProps = {
+  storyText: string;
+  miscues: SessionAudioMiscue[];
+  onDone: () => void;
+};
+
+function normalizeWord(word: string) {
+  return word.toLowerCase().replace(/[^a-z0-9']/g, "");
+}
+
+export default function CorrectionModal({
+  storyText,
+  miscues,
+  onDone,
+}: CorrectionModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>("story");
+  const [miscueIndex, setMiscueIndex] = useState(0);
+
+  const currentMiscue = miscues[miscueIndex] ?? null;
+  const isLastMiscue = miscueIndex >= miscues.length - 1;
+
+  const handleContinue = () => {
+    if (isLastMiscue) {
+      onDone();
+      return;
+    }
+
+    setMiscueIndex((prev) => prev + 1);
+
+    // Return to the story tab for each new miscue.
+    setActiveTab("story");
+  };
 
   return (
-    <div className="w-full max-w-md bg-white rounded-[20px] shadow-lg overflow-hidden">
+    <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-[20px] bg-white shadow-2xl">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 pb-2">
-        <h2 className="text-lg font-bold text-gray-900">Reading Feedback</h2>
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">
+            Reading Feedback
+          </h2>
+
+          <p className="mt-1 text-xs text-gray-400">
+            {miscues.length === 1
+              ? "1 word to practice"
+              : `${miscues.length} words to practice`}
+          </p>
+        </div>
+
         <span className="text-xs font-semibold text-red-500 bg-red-50 px-2 py-1 rounded-full">
-          ⚠ 2 errors
+          ⚠ {miscues.length}{" "}
+          {miscues.length === 1 ? "error" : "errors"}
         </span>
       </div>
 
@@ -29,6 +72,7 @@ export default function CorrectionModal() {
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            type="button"
             onClick={() => setActiveTab(tab.id)}
             className={`flex-1 min-h-[48px] text-sm font-medium transition ${
               activeTab === tab.id
@@ -43,197 +87,221 @@ export default function CorrectionModal() {
 
       {/* Tab content */}
       <div className="p-5">
-        {activeTab === "story" && <StoryTab />}
-        {activeTab === "phonics" && <PhonicsTab />}
-        {activeTab === "listen" && <ListenTab />}
-        {activeTab === "practice" && <PracticeTab />}
+        {activeTab === "story" && (
+          <StoryTab
+            storyText={storyText}
+            miscues={miscues}
+          />
+        )}
+
+        {activeTab === "phonics" && (
+          <PhonicsTab miscue={currentMiscue} />
+        )}
+
+        {activeTab === "listen" && (
+          <ListenTab storyText={storyText} />
+        )}
+
+        {activeTab === "practice" && (
+          <PracticeTab miscue={currentMiscue} />
+        )}
+      </div>
+
+      {/* Footer action */}
+      <div className="px-5 pb-5">
+        <button
+          type="button"
+          onClick={handleContinue}
+          className="w-full min-h-[48px] bg-[#008C9A] text-white rounded-xl font-semibold"
+        >
+          {isLastMiscue ? "Continue to results" : "Next word →"}
+        </button>
       </div>
     </div>
   );
 }
 
-function StoryTab() {
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="w-full h-28 bg-[#FAFAFA] rounded-xl flex items-center justify-center text-gray-400 text-sm">
-        image
-      </div>
-      <p className="text-sm text-gray-800 leading-relaxed w-full">
-        The{" "}
-        <span className="bg-red-100 text-red-600 font-semibold rounded px-1">
-          enormous
-        </span>{" "}
-        elephant walked through the tall green{" "}
-        <span className="bg-red-100 text-red-600 font-semibold rounded px-1">
-          grass.
-        </span>
-      </p>
-    </div>
+function StoryTab({
+  storyText,
+  miscues,
+}: {
+  storyText: string;
+  miscues: SessionAudioMiscue[];
+}) {
+  const miscueWords = useMemo(
+    () =>
+      new Set(
+        miscues.map((m) => normalizeWord(m.word))
+      ),
+    [miscues]
   );
-}
 
-function PhonicsTab() {
-  const syllables = [
-    { text: "e", type: "vowel" },
-    { text: "nor", type: "consonant" },
-    { text: "mous", type: "consonant" },
-  ];
+  const words = storyText.split(/\s+/).filter(Boolean);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-gray-400 uppercase tracking-wide">
-            Practice word
-          </p>
-          <p className="text-2xl font-bold text-gray-900">enormous</p>
-        </div>
-        <button
-          aria-label="Play pronunciation"
-          className="w-12 h-12 min-h-[48px] bg-[#E6F5F6] rounded-full flex items-center justify-center text-[#008C9A]"
-        >
-          🔊
-        </button>
+      <div className="w-full h-28 bg-[#FAFAFA] rounded-xl flex items-center justify-center text-gray-400 text-sm">
+        Story
       </div>
 
-      <p className="text-xs text-gray-400 uppercase tracking-wide text-center">
-        Tap each syllable to hear it
-      </p>
-
-      <div className="flex justify-center gap-3">
-        {syllables.map((s, i) => (
-          <div key={i} className="flex flex-col items-center gap-1">
-            <button
-              className={`px-4 py-3 rounded-xl text-white text-lg font-semibold min-h-[48px] min-w-[48px] ${
-                s.type === "vowel" ? "bg-red-500" : "bg-blue-400"
-              }`}
-            >
-              {s.text}
-            </button>
-            <span className="text-xs text-gray-400">#{i + 1}</span>
-          </div>
+      <p className="text-base leading-relaxed text-gray-800">
+        {words.map((word, i) => (
+          <span key={i}>
+            {miscueWords.has(normalizeWord(word)) ? (
+              <span className="bg-red-100 text-red-600 font-semibold rounded px-1">
+                {word}
+              </span>
+            ) : (
+              <span>{word}</span>
+            )}
+            {" "}
+          </span>
         ))}
-      </div>
-
-      <div className="bg-[#E6F5F6] rounded-xl px-4 py-3 flex items-center gap-3">
-        <button
-          aria-label="Play full pronunciation"
-          className="w-12 h-12 min-h-[48px] bg-[#008C9A] rounded-full flex items-center justify-center text-white"
-        >
-          ▶
-        </button>
-        <div>
-          <p className="text-sm font-semibold text-gray-800">e · nor · mous</p>
-          <p className="text-xs text-gray-500">ih · NOR · muhs</p>
-        </div>
-      </div>
-
-      <button className="w-full min-h-[48px] bg-[#008C9A] text-white rounded-xl font-semibold">
-        ↻ Practice Again
-      </button>
+      </p>
     </div>
   );
 }
 
-function ListenTab() {
-  const words = [
-    "The",
-    "enormous",
-    "elephant",
-    "walked",
-    "through",
-    "the",
-    "tall",
-    "green",
-    "grass.",
-  ];
-  const highlightedIndices = [3, 4]; // "walked", "through"
+function PhonicsTab({
+  miscue,
+}: {
+  miscue: SessionAudioMiscue | null;
+}) {
+  if (!miscue) {
+    return (
+      <p className="text-sm text-gray-500 text-center">
+        No words to practice. Great job!
+      </p>
+    );
+  }
 
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="text-center">
+        <p className="text-xs text-gray-400 uppercase tracking-wide">
+          Practice word
+        </p>
+
+        <p className="text-3xl font-bold text-gray-900 mt-1">
+          {miscue.word}
+        </p>
+      </div>
+
+      <div className="flex justify-center gap-6">
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-xs text-gray-400">
+            You said
+          </span>
+
+          <span className="bg-red-100 text-red-600 font-semibold rounded-full px-4 py-2 text-lg">
+            {miscue.actualPhonemes || "—"}
+          </span>
+        </div>
+
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-xs text-gray-400">
+            The word is
+          </span>
+
+          <span className="bg-[#E6F5F6] text-[#008C9A] font-semibold rounded-full px-4 py-2 text-lg">
+            {miscue.expectedPhonemes || "—"}
+          </span>
+        </div>
+      </div>
+
+      {miscue.phonicsCategory ? (
+        <p className="text-xs text-gray-400 text-center">
+          Focus skill: {miscue.phonicsCategory}
+        </p>
+      ) : null}
+
+      {miscue.similarityScore !== undefined ? (
+        <p className="text-xs text-gray-400 text-center">
+          Similarity:{" "}
+          {Math.round(miscue.similarityScore * 100)}%
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ListenTab({
+  storyText,
+}: {
+  storyText: string;
+}) {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="text-sm font-semibold text-gray-800">Listen Along</p>
+        <p className="text-sm font-semibold text-gray-800">
+          Listen Along
+        </p>
+
         <p className="text-xs text-gray-400">
-          Words highlight as the story plays
+          Read along with the story text
         </p>
       </div>
 
       <div className="bg-[#FAFAFA] rounded-xl p-4">
-        <p className="text-base leading-relaxed">
-          {words.map((word, i) => (
-            <span
-              key={i}
-              className={
-                highlightedIndices.includes(i)
-                  ? "bg-[#008C9A] text-white rounded px-1"
-                  : "text-gray-800"
-              }
-            >
-              {word}{" "}
-            </span>
-          ))}
+        <p className="text-base leading-relaxed text-gray-800">
+          {storyText}
         </p>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-gray-400">0:03</span>
-        <div className="flex-1 h-1 bg-gray-200 rounded-full relative">
-          <div className="h-1 bg-[#008C9A] rounded-full w-[40%]" />
-        </div>
-        <span className="text-xs text-gray-400">0:08</span>
-      </div>
-
-      <div className="flex items-center justify-center gap-4">
-        <button
-          aria-label="Restart"
-          className="w-12 h-12 min-h-[48px] flex items-center justify-center text-gray-500"
-        >
-          ↺
-        </button>
-        <button
-          aria-label="Play or pause"
-          className="w-12 h-12 min-h-[48px] bg-[#008C9A] rounded-full flex items-center justify-center text-white"
-        >
-          ▶
-        </button>
-        <button
-          aria-label="Volume"
-          className="w-12 h-12 min-h-[48px] flex items-center justify-center text-gray-500"
-        >
-          🔊
-        </button>
       </div>
     </div>
   );
 }
 
-function PracticeTab() {
+function PracticeTab({
+  miscue,
+}: {
+  miscue: SessionAudioMiscue | null;
+}) {
   const [isListening, setIsListening] = useState(false);
+
+  if (!miscue) {
+    return (
+      <p className="text-sm text-gray-500 text-center">
+        No words to practice. Great job!
+      </p>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center gap-4">
       <p className="text-xs text-gray-400 uppercase tracking-wide">
         Say the highlighted word
       </p>
+
       <div className="bg-[#E6F5F6] rounded-xl px-6 py-3">
-        <p className="text-2xl font-bold text-[#008C9A]">enormous</p>
+        <p className="text-2xl font-bold text-[#008C9A]">
+          {miscue.word}
+        </p>
       </div>
-      <p className="text-xs text-gray-400">ih · NOR · muhs</p>
+
+      <p className="text-xs text-gray-400">
+        Expected: {miscue.expectedPhonemes || "—"}
+      </p>
 
       <button
+        type="button"
         aria-label="Start recording"
-        onClick={() => setIsListening(!isListening)}
+        onClick={() => setIsListening((prev) => !prev)}
         className="relative w-20 h-20 min-h-[48px] flex items-center justify-center"
       >
         {isListening && (
           <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping" />
         )}
+
         <span className="relative w-20 h-20 bg-red-500 rounded-full active:scale-95 transition flex items-center justify-center text-white">
           🎤
         </span>
       </button>
 
-      {isListening && <p className="text-sm text-gray-500">Listening...</p>}
+      {isListening && (
+        <p className="text-sm text-gray-500">
+          Listening...
+        </p>
+      )}
     </div>
   );
 }

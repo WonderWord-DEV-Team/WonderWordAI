@@ -181,7 +181,7 @@ export default function WordExplorerPage() {
 
         {hasSearched && submittedWord && isLoading && (
           <div className="w-full max-w-[990px] flex items-center justify-center py-16 text-lg font-semibold text-[#8a8a8a]">
-            Looking up "{submittedWord}"...
+            Looking up &quot;{submittedWord}&quot;...
           </div>
         )}
 
