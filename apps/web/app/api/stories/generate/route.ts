@@ -167,6 +167,13 @@ export async function POST(request: NextRequest) {
         });
       } catch (generationError) {
         const mapped = mapStoryUpstreamError(generationError);
+
+        // ticket: surface pass/fail for each story generation attempt in server logs
+        console.log(
+          `[stories/generate] attempt ${attempt}/${MAX_GENERATION_ATTEMPTS} for word "${word}": FAILED ` +
+            `(could not produce valid story JSON -- ${mapped.code})`
+        );
+
         // configuration/timeout problems won't be fixed by retrying -- bubble up now
         if (mapped.code === "configuration_error" || mapped.code === "story_timeout") {
           throw generationError;
@@ -189,6 +196,13 @@ export async function POST(request: NextRequest) {
 
       lastValidation = validation;
 
+      // ticket: surface pass/fail for each story generation attempt in server logs
+      console.log(
+        `[stories/generate] attempt ${attempt}/${MAX_GENERATION_ATTEMPTS} for word "${word}": ` +
+          `${validation.is_valid ? "PASSED" : "FAILED"}` +
+          (validation.errors.length ? ` (errors: ${validation.errors.join("; ")})` : "")
+      );
+
       if (validation.is_valid) {
         finalStoryText = storyResult.story_text;
         break;
@@ -201,6 +215,9 @@ export async function POST(request: NextRequest) {
 
     if (!finalStoryText || !lastValidation?.is_valid) {
       const issues = lastValidation?.errors.length ? ` Last issues: ${lastValidation.errors.join("; ")}` : "";
+      console.log(
+        `[stories/generate] word "${word}" generation FAILED after ${MAX_GENERATION_ATTEMPTS} attempt(s).`
+      );
       console.log("Final validation state:", lastValidation);
       return errorResponse(
         "story_validation_failed",
@@ -208,6 +225,10 @@ export async function POST(request: NextRequest) {
         502
       );
     }
+
+    console.log(
+      `[stories/generate] word "${word}" generation PASSED (validation score: ${lastValidation.validation_score}).`
+    );
 
     // Saves the generated story to the database
     const { data: storyRecord, error: insertError } = await supabase
