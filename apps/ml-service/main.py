@@ -12,12 +12,8 @@ from routers.activity_recommendation import router as activity_recommendation_ro
 from routers.validate_story import router as validate_story_router 
 from routers.word_definition import router as word_definition_router
 from services.embedding_service import embedding_model
-from config import SENTRY_DSN  
-from routers.word_definition import router as word_definition_router
-
+from config import SENTRY_DSN  # ADDED
 from routers.themed_story import router as themed_story_router
-
-from routers.validate_story import router as validate_story_router
 from routers.narrate import router as narrate_router
 
 if SENTRY_DSN:
