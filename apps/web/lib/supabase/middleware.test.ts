@@ -42,13 +42,13 @@ test("authenticated children and parents are routed by role", () => {
     classifyMiddlewareRequest("/parent/dashboard", { status: "authenticated", role: "PARENT" }),
     { kind: "next" }
   );
-  assert.deepEqual(
+ assert.deepEqual(
     classifyMiddlewareRequest("/parent/dashboard", { status: "authenticated", role: "CHILD" }),
-    { kind: "redirect", pathname: "/child/demo-session/read" }
+    { kind: "redirect", pathname: "/child" }
   );
-  assert.deepEqual(
+ assert.deepEqual(
     classifyMiddlewareRequest("/child/demo-session/read", { status: "authenticated", role: "PARENT" }),
-    { kind: "redirect", pathname: "/parent/dashboard" }
+    { kind: "redirect", pathname: "/profiles" }
   );
 });
 
@@ -58,7 +58,7 @@ test("login route does not redirect unauthenticated users back to itself", () =>
   });
   assert.deepEqual(
     classifyMiddlewareRequest("/auth/login", { status: "authenticated", role: "PARENT" }),
-    { kind: "redirect", pathname: "/parent/dashboard" }
+    { kind: "redirect", pathname: "/profiles" }
   );
 });
 
