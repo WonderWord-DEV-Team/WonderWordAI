@@ -10,6 +10,8 @@ PROTECTED_PATHS = {
     "/activity-recommendation",
     "/narrate",
     "/validate-story",
+    "/word-definition",
+    "/themed-story",
 }
 
 

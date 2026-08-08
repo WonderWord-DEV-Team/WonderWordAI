@@ -14,6 +14,8 @@ from routers.validate_story import router as validate_story_router  # ADDED
 from services.embedding_service import embedding_model
 from config import SENTRY_DSN  # ADDED
 
+from routers.themed_story import router as themed_story_router
+
 # ADDED — initialize Sentry once at import time, guarded by env var
 if SENTRY_DSN:
     import sentry_sdk
@@ -40,3 +42,4 @@ app.include_router(router)
 app.include_router(phonics_router)
 app.include_router(activity_recommendation_router)
 app.include_router(validate_story_router) 
+app.include_router(themed_story_router)
