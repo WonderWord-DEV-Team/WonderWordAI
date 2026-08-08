@@ -6,6 +6,7 @@ import { initialLoginState, type LoginActionState } from "@/app/auth/login/state
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 
 type LoginFormProps = {
   initialError?: string;
@@ -57,12 +58,11 @@ export function LoginForm({ initialError }: LoginFormProps) {
 
   return (
     <>
-      <p className="text-center text-red-500 font-black text-xl">WonderWord AI</p>
-      <h1 className="mt-2 text-center text-3xl font-black text-gray-900">Welcome Back!</h1>
+      <img src="/logo.svg" alt="WonderWord AI" className="h-8 ml-20 w-auto fig-center" />
+      <h1 className="mt-2 text-center text-3xl font-serif font-bold text-[#a3352b]">Welcome Back!</h1>
       <p className="mt-2 text-center text-sm text-gray-500">
         Log in to check on your child&apos;s progress.
       </p>
-
       <button
         type="button"
         disabled={googleLoading}
@@ -126,9 +126,9 @@ export function LoginForm({ initialError }: LoginFormProps) {
 
       <p className="mt-6 text-center text-sm text-gray-500">
         Don&apos;t have an account?{" "}
-        <a href="#" className="font-bold text-red-500 hover:underline">
+        <Link href="/onboarding/step-1" className="font-bold text-red-500 hover:underline">
           Sign Up
-        </a>
+       </Link>
       </p>
     </>
   );

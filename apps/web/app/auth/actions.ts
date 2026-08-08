@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { getRoleHome, parseUserRole } from "@/lib/auth/types";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
@@ -78,6 +79,7 @@ export async function signOut() {
     await supabase.auth.signOut();
   }
 
+  cookies().delete("parent_session");
   redirect("/auth/login");
 }
 
@@ -99,7 +101,6 @@ export async function requestPasswordReset(
     redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/auth/reset-password`,
   });
 
-  // Always return success — avoids leaking which emails are registered
   return { email, success: true, message: null };
 }
 

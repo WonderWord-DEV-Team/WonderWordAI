@@ -6,17 +6,16 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { ChildCreationResult } from "@/app/onboarding/actions";
 
 export type ChildProfile = {
   nickname: string;
   age: string;
   readingLevel: string;
-  interests: string[];
 };
 
 export type OnboardingData = {
   parentName: string;
-  parentPhone: string;
   parentEmail: string;
   password: string;
   childCount: string;
@@ -27,12 +26,10 @@ const EMPTY_CHILD: ChildProfile = {
   nickname: "",
   age: "",
   readingLevel: "starting",
-  interests: [],
 };
 
 const INITIAL_DATA: OnboardingData = {
   parentName: "",
-  parentPhone: "",
   parentEmail: "",
   password: "",
   childCount: "1",
@@ -44,26 +41,20 @@ type OnboardingContextValue = {
   updateParentInfo: (fields: Partial<Omit<OnboardingData, "children">>) => void;
   setChildCount: (count: string) => void;
   updateChild: (index: number, fields: Partial<ChildProfile>) => void;
-  toggleChildInterest: (index: number, interest: string) => void;
   addChild: () => void;
   removeChild: (index: number) => void;
+  submissionResult: ChildCreationResult[] | null;
+  setSubmissionResult: (result: ChildCreationResult[] | null) => void;
   reset: () => void;
 };
 
 const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 
-/**
- * Wrap the onboarding route group with this provider (see app/onboarding/layout.tsx)
- * so state survives navigation between step-1 → step-4.
- * In-memory only — a refresh clears it. Swap the state source for
- * sessionStorage or a real API call once the flow is wired up for real.
- */
 export function OnboardingProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<OnboardingData>(INITIAL_DATA);
+  const [submissionResult, setSubmissionResult] = useState<ChildCreationResult[] | null>(null);
 
-  const updateParentInfo: OnboardingContextValue["updateParentInfo"] = (
-    fields
-  ) => {
+  const updateParentInfo: OnboardingContextValue["updateParentInfo"] = (fields) => {
     setData((prev) => ({ ...prev, ...fields }));
   };
 
@@ -71,27 +62,10 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     setData((prev) => ({ ...prev, childCount: count }));
   };
 
-  const updateChild: OnboardingContextValue["updateChild"] = (
-    index,
-    fields
-  ) => {
+  const updateChild: OnboardingContextValue["updateChild"] = (index, fields) => {
     setData((prev) => {
       const next = [...prev.children];
       next[index] = { ...next[index], ...fields };
-      return { ...prev, children: next };
-    });
-  };
-
-  const toggleChildInterest = (index: number, interest: string) => {
-    setData((prev) => {
-      const next = [...prev.children];
-      const current = next[index].interests;
-      next[index] = {
-        ...next[index],
-        interests: current.includes(interest)
-          ? current.filter((i) => i !== interest)
-          : [...current, interest],
-      };
       return { ...prev, children: next };
     });
   };
@@ -110,7 +84,10 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  const reset = () => setData(INITIAL_DATA);
+  const reset = () => {
+    setData(INITIAL_DATA);
+    setSubmissionResult(null);
+  };
 
   return (
     <OnboardingContext.Provider
@@ -119,9 +96,10 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
         updateParentInfo,
         setChildCount,
         updateChild,
-        toggleChildInterest,
         addChild,
         removeChild,
+        submissionResult,
+        setSubmissionResult,
         reset,
       }}
     >
