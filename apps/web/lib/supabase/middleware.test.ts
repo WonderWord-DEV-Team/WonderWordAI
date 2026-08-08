@@ -68,6 +68,9 @@ test("invalid or missing role metadata fails closed", () => {
     pathname: "/auth/login",
     error: "provisioning"
   });
+  assert.deepEqual(classifyMiddlewareRequest("/auth/login", { status: "invalid-role" }), {
+    kind: "next"
+  });
   assert.deepEqual(classifyMiddlewareRequest("/", { status: "invalid-role" }), {
     kind: "redirect",
     pathname: "/auth/login",

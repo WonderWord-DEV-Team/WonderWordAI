@@ -6,6 +6,7 @@ import {
   type DashboardChildProfile,
   type DashboardSession
 } from "@/lib/parent/dashboard";
+import { getE2eAuthState, getE2eLinkedChildIds, getE2eUserById, isE2eMode, listE2eSessionsForUser } from "@/lib/e2e/fixtures";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { errorResponse, getAuthenticatedAppUser } from "@/lib/sessions/api";
@@ -36,6 +37,10 @@ type DashboardSessionRow = {
 };
 
 export async function GET(request: NextRequest) {
+  if (isE2eMode()) {
+    return handleE2eParentDashboard(request);
+  }
+
   if (!hasSupabaseEnv()) {
     return errorResponse("configuration_error", "Supabase is not configured.", 500);
   }
@@ -128,6 +133,50 @@ export async function GET(request: NextRequest) {
       period: parsedQuery.data.period,
       children,
       sessions: sessions.data
+    })
+  );
+}
+
+function handleE2eParentDashboard(request: NextRequest) {
+  const parsedQuery = parentDashboardQuerySchema.safeParse({
+    period: request.nextUrl.searchParams.get("period") ?? undefined
+  });
+
+  if (!parsedQuery.success) {
+    return errorResponse("invalid_request", "The request query is invalid.", 400);
+  }
+
+  const auth = getE2eAuthState(request.cookies);
+  if (auth.status === "unauthenticated") {
+    return errorResponse("unauthorized", "Authentication is required.", 401);
+  }
+
+  if (auth.status !== "authenticated" || auth.appUser.role !== "PARENT") {
+    return errorResponse("forbidden", "Only parent accounts can access the dashboard.", 403);
+  }
+
+  const childIds = getE2eLinkedChildIds(auth.appUser.id);
+  const children: DashboardChildProfile[] = childIds
+    .map(getE2eUserById)
+    .filter((child): child is NonNullable<ReturnType<typeof getE2eUserById>> => Boolean(child))
+    .map((child) => ({ id: child.id, name: child.name }));
+  const periodStart = getPeriodStart(parsedQuery.data.period);
+  const sessions = listE2eSessionsForUser(auth.appUser)
+    .filter((session) => !periodStart || new Date(session.start_time) >= periodStart)
+    .map((session) => ({
+      id: session.id,
+      childId: session.child_id,
+      startTime: session.start_time,
+      endTime: session.end_time,
+      totalWords: session.total_words,
+      correctWords: session.correct_words
+    }));
+
+  return NextResponse.json(
+    buildParentDashboard({
+      period: parsedQuery.data.period,
+      children,
+      sessions
     })
   );
 }

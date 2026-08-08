@@ -1,23 +1,25 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LogOut, Volume2, Mic } from "lucide-react";
 import { useChildSession } from "@/components/child/ChildSessionContext";
 import { KaraokeText } from "@/components/child/KaraokeText";
 import { ReadingRecorder } from "@/components/child/ReadingRecorder";
 import { WorksheetCapture } from "@/components/worksheet/WorksheetCapture";
-import { useCreateSession, useOpenSessions } from "@/hooks/useSessions";
+import { useCreateSession, useOpenSessions, useSession } from "@/hooks/useSessions";
+import { ApiError } from "@/lib/api/client";
 import type { AuthContext } from "@/lib/auth/types";
 import { normalizeKaraokeWord, type KaraokeTimeline } from "@/lib/karaoke/timeline";
 import type { SessionAudioMiscue } from "@/lib/audio/schema";
 
 type ChildReadingShellProps = {
   auth: AuthContext;
+  routeSessionId: string;
 };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export function ChildReadingShell({ auth }: ChildReadingShellProps) {
+export function ChildReadingShell({ auth, routeSessionId }: ChildReadingShellProps) {
   const {
     sessionId,
     setSessionId,
@@ -26,10 +28,13 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
     worksheetText,
     worksheetStatus,
     setWorksheetStatus,
-    setOcrResult
+    setOcrResult,
+    clearOcrResult
   } = useChildSession();
   const { data: openSessions } = useOpenSessions();
   const { mutateAsync: createSession } = useCreateSession();
+  const parsedRouteSessionId = uuidPattern.test(routeSessionId) ? routeSessionId : null;
+  const sessionQuery = useSession(parsedRouteSessionId);
 
   const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeTimeline | null>(null);
   const [playbackState, setPlaybackState] = useState({
@@ -46,6 +51,19 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
     [sessionMiscues]
   );
   const currentMiscue = sessionMiscues[0] ?? null;
+
+  useEffect(() => {
+    if (sessionId === routeSessionId) {
+      return;
+    }
+
+    setSessionId(routeSessionId);
+    clearOcrResult();
+    setKaraokeTimeline(null);
+    setPlaybackState({ activeIndex: -1, currentTime: 0, playbackCompleted: false });
+    setSessionMiscues([]);
+    setShowCorrectionModal(false);
+  }, [clearOcrResult, routeSessionId, sessionId, setSessionId]);
 
   const ensureSession = async () => {
     if (uuidPattern.test(sessionId)) {
@@ -124,10 +142,33 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
             </p>
           </div>
 
-          {!worksheetText ? (
+          {!parsedRouteSessionId ? (
+            <ReadingRecoveryState
+              title="This reading session link is invalid."
+              body="Return to child home and start a fresh worksheet scan."
+            />
+          ) : sessionQuery.isLoading ? (
+            <ReadingRecoveryState
+              title="Checking reading session..."
+              body="We are making sure this session belongs to you."
+            />
+          ) : sessionQuery.isError ? (
+            <ReadingRecoveryState
+              title={getSessionErrorTitle(sessionQuery.error)}
+              body="Return to child home and start a fresh worksheet scan."
+            />
+          ) : sessionQuery.data?.status === "closed" ? (
+            <ReadingRecoveryState
+              title="This reading session is already closed."
+              body="Start a new session to keep reading."
+            />
+          ) : !worksheetText ? (
             <div className="rounded-[24px] border border-[#ecdfc9]/60 bg-white p-10 text-center shadow-sm">
               <p className="text-lg font-extrabold leading-8 text-[#2b2b2b]">
-                Scan a worksheet on the home page first, then come back here to read it.
+                Worksheet text is no longer available for this reading session.
+              </p>
+              <p className="mt-2 text-sm font-semibold leading-6 text-[#6f6f6f]">
+                Rescan worksheet or start a new reading session.
               </p>
                 <a
                 href="/child"
@@ -276,4 +317,31 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
       </footer>
     </div>
   );
+}
+
+function ReadingRecoveryState({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-[24px] border border-[#ecdfc9]/60 bg-white p-10 text-center shadow-sm">
+      <p className="text-lg font-extrabold leading-8 text-[#2b2b2b]">{title}</p>
+      <p className="mt-2 text-sm font-semibold leading-6 text-[#6f6f6f]">{body}</p>
+      <a
+        href="/child"
+        className="mt-4 inline-block rounded-full bg-[#ff6868] px-6 py-3 text-sm font-extrabold text-white transition hover:bg-[#ef5353]"
+      >
+        Go to Home
+      </a>
+    </div>
+  );
+}
+
+function getSessionErrorTitle(error: Error) {
+  if (error instanceof ApiError && error.status === 404) {
+    return "This reading session is not available.";
+  }
+
+  if (error instanceof ApiError && error.status === 401) {
+    return "Please sign in again to continue reading.";
+  }
+
+  return "We could not open this reading session.";
 }
