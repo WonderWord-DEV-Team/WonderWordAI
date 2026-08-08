@@ -1,10 +1,32 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import {
+  getE2eAuthState,
+  getE2eChildProfile,
+  getE2eLinkedChildIds,
+  isE2eMode
+} from "@/lib/e2e/fixtures";
 import { createClient } from "@/lib/supabase/server";
 import { ProfileGrid } from "./ProfileGrid";
 
 export const dynamic = "force-dynamic";
 
 export default async function ChooseProfilePage() {
+  if (isE2eMode()) {
+    const auth = getE2eAuthState(cookies());
+    if (auth.status !== "authenticated" || auth.appUser.role !== "PARENT") {
+      redirect("/auth/login");
+    }
+
+    const profiles = getE2eLinkedChildIds(auth.appUser.id)
+      .map(getE2eChildProfile)
+      .filter((profile): profile is NonNullable<ReturnType<typeof getE2eChildProfile>> =>
+        Boolean(profile)
+      );
+
+    return <ProfileGrid profiles={profiles} />;
+  }
+
   const supabase = createClient();
   const {
     data: { user }

@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { parseUserRole } from "@/lib/auth/types";
+import {
+  e2eImageKeywords,
+  e2eWorksheetText,
+  findE2eSessionForChild,
+  getE2eAuthState,
+  isE2eMode
+} from "@/lib/e2e/fixtures";
 import { extractWorksheetText, mapOcrUpstreamError } from "@/lib/ocr/client";
 import {
   isAllowedImageType,
@@ -20,6 +27,10 @@ type AppUser = {
 };
 
 export async function POST(request: NextRequest) {
+  if (isE2eMode()) {
+    return handleE2eUpload(request);
+  }
+
   if (!hasSupabaseEnv()) {
     return errorResponse("configuration_error", "Supabase is not configured.", 500);
   }
@@ -113,6 +124,65 @@ export async function POST(request: NextRequest) {
 
     return errorResponse(stableError.code, stableError.message, stableError.status);
   }
+}
+
+async function handleE2eUpload(request: NextRequest) {
+  let formData: FormData;
+
+  try {
+    formData = await request.formData();
+  } catch (error) {
+    console.error("Failed to read worksheet upload form data.", error);
+
+    return errorResponse("invalid_session", "The upload request is invalid.", 400);
+  }
+
+  const sessionId = formData.get("sessionId");
+
+  if (typeof sessionId !== "string" || !sessionId.trim()) {
+    return errorResponse("session_missing", "A reading session is required.", 400);
+  }
+
+  const parsedSessionId = sessionIdSchema.safeParse(sessionId);
+
+  if (!parsedSessionId.success) {
+    return errorResponse("invalid_session", "The reading session is invalid.", 400);
+  }
+
+  const file = formData.get("file");
+  const worksheetFile = file instanceof File ? file : null;
+  const fileError = validateWorksheetImageFile(worksheetFile);
+
+  if (fileError) {
+    return errorResponse(fileError.code, fileError.message, fileError.status);
+  }
+
+  const auth = getE2eAuthState(request.cookies);
+  if (auth.status === "unauthenticated") {
+    return errorResponse("unauthorized", "Authentication is required.", 401);
+  }
+
+  if (auth.status !== "authenticated" || auth.appUser.role !== "CHILD") {
+    return errorResponse("forbidden", "Only child accounts can scan worksheets.", 403);
+  }
+
+  const session = findE2eSessionForChild(parsedSessionId.data, auth.appUser.id);
+
+  if (!session) {
+    return errorResponse("not_found", "Reading session not found.", 404);
+  }
+
+  if (session.end_time) {
+    return errorResponse("session_closed", "This reading session is already closed.", 409);
+  }
+
+  return NextResponse.json({
+    data: {
+      sessionId: session.id,
+      text: e2eWorksheetText,
+      imageKeywords: e2eImageKeywords
+    }
+  });
 }
 
 async function getAuthenticatedChildUser(

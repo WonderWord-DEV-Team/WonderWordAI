@@ -13,7 +13,9 @@ export function classifyMiddlewareRequest(
   pathname: string,
   auth: MiddlewareAuthState
 ): MiddlewareDecision {
-  const isProtectedRoute = pathname.startsWith("/parent") || pathname.startsWith("/child");
+  const isParentProtectedRoute = pathname.startsWith("/parent") || pathname === "/settings";
+  const isChildProtectedRoute = pathname.startsWith("/child");
+  const isProtectedRoute = isParentProtectedRoute || isChildProtectedRoute;
   const isLoginRoute = pathname === "/auth/login";
 
   if (auth.status === "unauthenticated") {
@@ -21,6 +23,10 @@ export function classifyMiddlewareRequest(
   }
 
   if (auth.status === "invalid-role") {
+    if (isLoginRoute) {
+      return { kind: "next" };
+    }
+
     return { kind: "redirect", pathname: "/auth/login", error: "provisioning" };
   }
 
@@ -28,11 +34,11 @@ export function classifyMiddlewareRequest(
     return { kind: "redirect", pathname: getRoleHome(auth.role) };
   }
 
-  if (pathname.startsWith("/parent") && auth.role !== "PARENT") {
+  if (isParentProtectedRoute && auth.role !== "PARENT") {
     return { kind: "redirect", pathname: getRoleHome(auth.role) };
   }
 
-  if (pathname.startsWith("/child") && auth.role !== "CHILD") {
+  if (isChildProtectedRoute && auth.role !== "CHILD") {
     return { kind: "redirect", pathname: getRoleHome(auth.role) };
   }
 

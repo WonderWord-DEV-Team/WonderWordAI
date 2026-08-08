@@ -1,4 +1,11 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import {
+  getE2eAuthState,
+  getE2eChildProfile,
+  getE2eSiblingProfiles,
+  isE2eMode
+} from "@/lib/e2e/fixtures";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ChildHomeClient } from "./ChildHomeClient";
@@ -6,6 +13,21 @@ import { ChildHomeClient } from "./ChildHomeClient";
 export const dynamic = "force-dynamic";
 
 export default async function ChildHomePage() {
+  if (isE2eMode()) {
+    const auth = getE2eAuthState(cookies());
+    if (auth.status !== "authenticated" || auth.appUser.role !== "CHILD") {
+      redirect("/auth/login");
+    }
+
+    const profile = getE2eChildProfile(auth.appUser.id);
+    return (
+      <ChildHomeClient
+        childName={profile?.name ?? "Reader"}
+        siblings={getE2eSiblingProfiles(auth.appUser.id)}
+      />
+    );
+  }
+
   const supabase = createClient();
   const {
     data: { user }
