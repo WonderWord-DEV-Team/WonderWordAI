@@ -36,7 +36,6 @@ import {
   Lightbulb,
   Sparkles
 } from "lucide-react";
-import Link from "next/link";
 import { signOut } from "@/app/auth/actions";
 
 const PERIOD_OPTIONS: { label: string; value: ParentDashboardPeriod }[] = [
