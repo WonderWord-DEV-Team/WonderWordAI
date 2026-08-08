@@ -140,7 +140,7 @@ export default function WordExplorerPage() {
         <div className="w-full flex flex-col justify-start items-start gap-8 md:gap-[60px] opacity-100 mb-12">
           {/* Title */}
           <div className="text-start">
-            <h1 className="text-4xl font-extrabold text-[#2b2b2b] tracking-tight sm:text-5xl font-body">
+            <h1 className="text-4xl font-serif font-bold text-[#a3352b] tracking-tight sm:text-5xl font-body">
               Word Explorer
             </h1>
             <p className="mt-2 text-lg text-[#5a5a5a]">
