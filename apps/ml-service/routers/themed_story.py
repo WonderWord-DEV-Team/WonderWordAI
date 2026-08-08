@@ -17,7 +17,7 @@ This is a FOR-FUN story based on a theme the child picked — not a corrective o
 teaching exercise. Keep it light, imaginative, and read-aloud friendly.
 
 Rules:
-- 150-300 words. Short enough for one sitting, not a chapter book.
+- Around 80-100 words. Very short and quick to read.
 - Simple, age-appropriate vocabulary and sentence structure.
 - Warm, silly, or adventurous tone — never scary or sad.
 - Give the story a short, fun title.

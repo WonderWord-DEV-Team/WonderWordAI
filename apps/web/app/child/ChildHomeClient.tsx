@@ -126,6 +126,15 @@ export function ChildHomeClient({
     router.push(`/child/${result.sessionId}/read`);
   };
 
+  const handleSelectWorld = async (worldName: string) => {
+    try {
+      const activeSessionId = await ensureSession();
+      router.push(`/child/${activeSessionId}/story?theme=${encodeURIComponent(worldName)}`);
+    } catch (err) {
+      console.error("Failed to start session for story", err);
+    }
+  };
+
   const handleBackToParent = async () => {
     const result = await switchToParent();
     if (result.success) {
@@ -320,21 +329,19 @@ export function ChildHomeClient({
           </h2>
           <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
             {STORY_WORLDS.map((world) => (
-              <div
+              <button
                 key={world.name}
-                className="relative flex flex-col items-center gap-2 rounded-2xl p-4 text-center text-white opacity-80"
+                onClick={() => handleSelectWorld(world.name)}
+                className="relative flex flex-col items-center gap-2 rounded-2xl p-4 text-center text-white hover:scale-[1.03] transition-all duration-200 cursor-pointer shadow-sm w-full outline-none"
                 style={{ backgroundColor: world.color }}
               >
-                <div className="absolute right-2 top-2">
-                  <ComingSoonBadge />
-                </div>
                 <span className="mt-4 text-3xl">{world.emoji}</span>
                 <span className="text-sm font-black">{world.name}</span>
-              </div>
+              </button>
             ))}
           </div>
           <p className="mt-3 text-xs leading-5 text-[#8a8a8a]">
-            AI-generated themed stories are coming soon — for now, scan a worksheet above to start reading.
+            Pick a story world above to write and type a magical AI-powered story.
           </p>
         </section>
       </main>
