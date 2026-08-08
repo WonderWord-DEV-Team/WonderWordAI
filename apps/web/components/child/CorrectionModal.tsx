@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { SessionAudioMiscue } from "@/lib/audio/schema";
+import { StoryTab, renderStoryText } from "@/components/child/StoryTab";
+import { useWordStory } from "@/hooks/useWordStory";
 
 type Tab = "story" | "phonics" | "listen" | "practice";
 
@@ -15,6 +17,11 @@ const tabs: { id: Tab; label: string }[] = [
 type CorrectionModalProps = {
   storyText: string;
   miscues: SessionAudioMiscue[];
+  // The signed-in child's id, used to generate a fresh, on-topic story +
+  // illustration for whichever word is currently being practiced. When
+  // omitted (or null), the modal falls back to showing the original
+  // worksheet text instead of generating anything.
+  childId?: string | null;
   onDone: () => void;
 };
 
@@ -32,25 +39,62 @@ function normalizeWord(word: string) {
 export default function CorrectionModal({
   storyText,
   miscues,
+  childId = null,
   onDone,
 }: CorrectionModalProps) {
-  const [activeTab, setActiveTab] = useState<Tab>("story");
+  // Track *which tab* we're on within the current word, rather than just
+  // the tab id, so the footer button can tell whether every tab has been
+  // visited yet for this word.
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [miscueIndex, setMiscueIndex] = useState(0);
 
+  const activeTab = tabs[activeTabIndex].id;
   const currentMiscue = miscues[miscueIndex] ?? null;
+  const isLastTabForWord = activeTabIndex >= tabs.length - 1;
   const isLastMiscue = miscueIndex >= miscues.length - 1;
 
+  // All of the words the child misread, normalized -- used to highlight
+  // them (in red) anywhere story text is shown.
+  const miscueWords = useMemo(
+    () => new Set(miscues.map((m) => normalizeWord(m.word))),
+    [miscues]
+  );
+
+  // Generates (and caches) a story + illustration specific to the current
+  // word. Shared by the Story tab and the Listen tab so every tab's
+  // activity -- story, phonics, listening, practice -- is scoped to
+  // whichever mispronounced word is currently active.
+  const wordStory = useWordStory({
+    childId,
+    miscue: currentMiscue,
+    fallbackText: storyText,
+  });
+
   const handleContinue = () => {
+    if (!isLastTabForWord) {
+      // Still stepping through this word's tabs (Story -> Phonics -> Listen -> Practice).
+      setActiveTabIndex((prev) => prev + 1);
+      return;
+    }
+
+    // Every tab has been gone through for this word.
     if (isLastMiscue) {
       onDone();
       return;
     }
 
+    // Move on to the next incorrect word (repeats of the same word are
+    // treated as their own pass through all four tabs) and start it back
+    // on the Story tab.
     setMiscueIndex((prev) => prev + 1);
-
-    // Return to the story tab for each new miscue.
-    setActiveTab("story");
+    setActiveTabIndex(0);
   };
+
+  const footerLabel = !isLastTabForWord
+    ? "Next Tab →"
+    : isLastMiscue
+      ? "Continue to results"
+      : "Next word →";
 
   return (
     <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-[20px] bg-white shadow-2xl">
@@ -76,11 +120,11 @@ export default function CorrectionModal({
 
       {/* Tab bar */}
       <div className="flex border-b border-gray-200 px-2">
-        {tabs.map((tab) => (
+        {tabs.map((tab, index) => (
           <button
             key={tab.id}
             type="button"
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => setActiveTabIndex(index)}
             className={`flex-1 min-h-[48px] text-sm font-medium transition ${
               activeTab === tab.id
                 ? "text-[#008C9A] border-b-2 border-[#008C9A]"
@@ -96,8 +140,11 @@ export default function CorrectionModal({
       <div className="p-5">
         {activeTab === "story" && (
           <StoryTab
-            storyText={storyText}
-            miscues={miscues}
+            storyText={wordStory.storyText}
+            imageStatus={wordStory.status}
+            imageUrl={wordStory.imageUrl}
+            highlightWords={miscueWords}
+            normalizeWord={normalizeWord}
           />
         )}
 
@@ -106,7 +153,11 @@ export default function CorrectionModal({
         )}
 
         {activeTab === "listen" && (
-          <ListenTab storyText={storyText} />
+          <ListenTab
+            word={currentMiscue?.word ?? null}
+            storyText={wordStory.storyText}
+            highlightWords={miscueWords}
+          />
         )}
 
         {activeTab === "practice" && (
@@ -121,9 +172,7 @@ export default function CorrectionModal({
           onClick={handleContinue}
           className="w-full min-h-[48px] bg-[#008C9A] text-white rounded-xl font-semibold"
         >
-          {isLastMiscue
-            ? "Continue to results"
-            : "Next word →"}
+          {footerLabel}
         </button>
       </div>
     </div>
@@ -133,50 +182,9 @@ export default function CorrectionModal({
 /* -------------------------------------------------------------------------- */
 /* Story                                                                       */
 /* -------------------------------------------------------------------------- */
-
-function StoryTab({
-  storyText,
-  miscues,
-}: {
-  storyText: string;
-  miscues: SessionAudioMiscue[];
-}) {
-  const miscueWords = useMemo(
-    () =>
-      new Set(
-        miscues.map((m) => normalizeWord(m.word))
-      ),
-    [miscues]
-  );
-
-  const words = storyText
-    .split(/\s+/)
-    .filter(Boolean);
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="w-full h-28 bg-[#FAFAFA] rounded-xl flex items-center justify-center text-gray-400 text-sm">
-        Story
-      </div>
-
-      <p className="text-base leading-relaxed text-gray-800">
-        {words.map((word, i) => (
-          <span key={i}>
-            {miscueWords.has(normalizeWord(word)) ? (
-              <span className="bg-red-100 text-red-600 font-semibold rounded px-1">
-                {word}
-              </span>
-            ) : (
-              <span>{word}</span>
-            )}
-
-            {" "}
-          </span>
-        ))}
-      </p>
-    </div>
-  );
-}
+/* Story generation is handled by the shared `useWordStory` hook above (see  */
+/* its call in CorrectionModal) so the Story and Listen tabs both render the */
+/* exact same word-specific story.                                           */
 
 /* -------------------------------------------------------------------------- */
 /* Phonics                                                                     */
@@ -473,27 +481,87 @@ function PhonicsTab({
 /* -------------------------------------------------------------------------- */
 
 function ListenTab({
+  word,
   storyText,
+  highlightWords,
 }: {
-  storyText: string;
+  word: string | null;
+  storyText: string | null;
+  highlightWords: Set<string>;
 }) {
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  /*
+   * Reads this word's story aloud so the "listening" activity is scoped to
+   * the specific word being practiced, same as Story/Phonics/Practice --
+   * not just a generic replay of the full worksheet.
+   */
+  const speak = () => {
+    if (
+      !storyText ||
+      typeof window === "undefined" ||
+      !window.speechSynthesis
+    ) {
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(storyText);
+    utterance.rate = 0.85;
+    utterance.lang = "en-US";
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <p className="text-sm font-semibold text-gray-800">
-          Listen Along
-        </p>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-800">
+            Listen Along
+          </p>
 
-        <p className="text-xs text-gray-400">
-          Read along with the story text
-        </p>
+          <p className="text-xs text-gray-400">
+            {word
+              ? `Read along with the story for "${word}"`
+              : "Read along with the story"}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={speak}
+          disabled={!storyText}
+          aria-label={
+            word ? `Listen to the story for ${word}` : "Listen to the story"
+          }
+          className="w-11 h-11 shrink-0 rounded-full bg-[#E6F5F6] text-[#008C9A] flex items-center justify-center hover:bg-[#d7eff1] transition disabled:opacity-40"
+        >
+          {isSpeaking ? "⏸" : "🔊"}
+        </button>
       </div>
 
       <div className="bg-[#FAFAFA] rounded-xl p-4">
-        <p className="text-base leading-relaxed text-gray-800">
-          {storyText}
-        </p>
+        {storyText ? (
+          <p className="text-base leading-relaxed text-gray-800">
+            {renderStoryText(storyText, highlightWords, normalizeWord)}
+          </p>
+        ) : (
+          <p className="text-sm text-gray-500">
+            Loading this word&apos;s story...
+          </p>
+        )}
       </div>
+
+      {isSpeaking && (
+        <p className="text-xs text-gray-400 text-center">
+          Reading aloud...
+        </p>
+      )}
     </div>
   );
 }
