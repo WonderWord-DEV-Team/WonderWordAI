@@ -27,34 +27,44 @@ const STORY_WORLDS: StoryWorld[] = [
   { name: "Animals", color: "#e6a100", emoji: "🐾" }
 ];
 
-const DAILY_REFRESH_CARDS = [
+type DailyRefreshCard = {
+  title: string;
+  description: string;
+  accent: string;
+  textAccent: string;
+  href: string | null;
+  action?: "read-aloud";
+};
+
+const DAILY_REFRESH_CARDS: DailyRefreshCard[] = [
   {
     title: "Word Beats",
     description: "Turn any word into a song!",
     accent: "bg-[#fde2e2]",
     textAccent: "text-[#c0392b]",
-    href: null as string | null
+    href: null
   },
   {
     title: "Word Vision",
     description: "See your words come to life!",
     accent: "bg-[#dbeeff]",
     textAccent: "text-[#1d6fa5]",
-    href: null as string | null
+    href: null
   },
   {
     title: "Word Explorer",
     description: "Find the secret meaning of words!",
     accent: "bg-[#fdf1d6]",
     textAccent: "text-[#a3352b]",
-    href: "/explorer" as string | null
+    href: "/explorer"
   },
   {
     title: "Read Aloud",
     description: "Practice reading with Wonder!",
     accent: "bg-[#ece1fb]",
     textAccent: "text-[#6b21a8]",
-    href: null as string | null
+    href: null,
+    action: "read-aloud"
   }
 ];
 
@@ -126,13 +136,9 @@ export function ChildHomeClient({
     router.push(`/child/${result.sessionId}/read`);
   };
 
-  const handleSelectWorld = async (worldName: string) => {
-    try {
-      const activeSessionId = await ensureSession();
-      router.push(`/child/${activeSessionId}/story?theme=${encodeURIComponent(worldName)}`);
-    } catch (err) {
-      console.error("Failed to start session for story", err);
-    }
+  const handleStartReadAloud = async () => {
+    const id = await ensureSession();
+    router.push(`/child/${id}/read`);
   };
 
   const handleBackToParent = async () => {
@@ -165,15 +171,9 @@ export function ChildHomeClient({
             <a href="#" className="border-b-2 border-[#a3352b] pb-1 font-bold text-[#2b2b2b]">
               Home
             </a>
-            <a href="#" className="hover:text-[#2b2b2b]">
-              Story Library
-            </a>
-            <a href="#" className="hover:text-[#2b2b2b]">
-              Store
-            </a>
-            <a href="#" className="hover:text-[#2b2b2b]">
-              Diagnostics
-            </a>
+            <a href="#" className="hover:text-[#2b2b2b]">Story Library</a>
+            <a href="#" className="hover:text-[#2b2b2b]">Store</a>
+            <a href="#" className="hover:text-[#2b2b2b]">Diagnostics</a>
           </nav>
 
           <div className="flex items-center gap-3">
@@ -209,7 +209,6 @@ export function ChildHomeClient({
       </header>
 
       <main className="mx-auto max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] px-6 py-8">
-        {/* Streak banner — Coming Soon */}
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#ff9d4d] to-[#ff6b35] p-6 text-white shadow-sm">
           <div className="absolute right-4 top-4">
             <ComingSoonBadge />
@@ -310,6 +309,17 @@ export function ChildHomeClient({
                   <p className="mt-1 text-sm leading-6 text-[#2b2b2b]/80">{card.description}</p>
                   <span className="mt-3 inline-block text-xs font-black text-[#2b2b2b]/60">⭐ Earn 20</span>
                 </Link>
+              ) : card.action === "read-aloud" ? (
+                <button
+                  key={card.title}
+                  type="button"
+                  onClick={handleStartReadAloud}
+                  className={`rounded-2xl ${card.accent} p-5 text-left shadow-sm transition hover:scale-[1.02]`}
+                >
+                  <h3 className={`font-black ${card.textAccent}`}>{card.title}</h3>
+                  <p className="mt-1 text-sm leading-6 text-[#2b2b2b]/80">{card.description}</p>
+                  <span className="mt-3 inline-block text-xs font-black text-[#2b2b2b]/60">⭐ Earn 20</span>
+                </button>
               ) : (
                 <div key={card.title} className={`relative rounded-2xl ${card.accent} p-5 opacity-70`}>
                   <div className="absolute right-3 top-3">
@@ -329,19 +339,21 @@ export function ChildHomeClient({
           </h2>
           <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
             {STORY_WORLDS.map((world) => (
-              <button
+              <div
                 key={world.name}
-                onClick={() => handleSelectWorld(world.name)}
-                className="relative flex flex-col items-center gap-2 rounded-2xl p-4 text-center text-white hover:scale-[1.03] transition-all duration-200 cursor-pointer shadow-sm w-full outline-none"
+                className="relative flex flex-col items-center gap-2 rounded-2xl p-4 text-center text-white opacity-80"
                 style={{ backgroundColor: world.color }}
               >
+                <div className="absolute right-2 top-2">
+                  <ComingSoonBadge />
+                </div>
                 <span className="mt-4 text-3xl">{world.emoji}</span>
                 <span className="text-sm font-black">{world.name}</span>
-              </button>
+              </div>
             ))}
           </div>
           <p className="mt-3 text-xs leading-5 text-[#8a8a8a]">
-            Pick a story world above to write and type a magical AI-powered story.
+            AI-generated themed stories are coming soon — for now, scan a worksheet above to start reading.
           </p>
         </section>
       </main>
