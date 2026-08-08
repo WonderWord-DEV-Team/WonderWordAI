@@ -238,6 +238,7 @@ export function ChildReadingShell({ auth }: ChildReadingShellProps) {
               <CorrectionModal
                 storyText={worksheetText ?? ""}
                 miscues={sessionMiscues}
+                childId={childId}
                 onDone={() => {
                   setShowCorrectionModal(false);
                   goToResults();
