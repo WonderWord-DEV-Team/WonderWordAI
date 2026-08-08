@@ -11,6 +11,7 @@ PROTECTED_PATHS = {
     "/phonics-lookup",
     "/narrate",
     "/validate-story",
+    "/themed-story",
     "/word-definition",
 }
 
