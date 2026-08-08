@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import OnboardingShell from "@/components/onboarding/OnboardingShell";
 import { useOnboarding } from "@/components/onboarding/OnboardingContext";
+import { checkParentEmailAvailable } from "@/app/onboarding/actions";
 
 const CHILD_COUNT_OPTIONS = ["1", "2", "3", "4+"];
 
@@ -12,14 +13,29 @@ export default function OnboardingStepOne() {
   const router = useRouter();
   const { data, updateParentInfo, setChildCount } = useOnboarding();
   const [showPassword, setShowPassword] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const canContinue =
     data.parentName.trim() !== "" &&
     data.parentEmail.trim() !== "" &&
     data.password.trim() !== "";
 
-  const handleContinue = () => {
-    if (!canContinue) return;
+  const handleContinue = async () => {
+    if (!canContinue || isChecking) return;
+
+    setIsChecking(true);
+    setEmailError(null);
+
+    const { available } = await checkParentEmailAvailable(data.parentEmail);
+
+    if (!available) {
+      setEmailError("An account with this email already exists. Try logging in instead.");
+      setIsChecking(false);
+      return;
+    }
+
+    setIsChecking(false);
     router.push("/onboarding/step-2");
   };
 
@@ -39,10 +55,7 @@ export default function OnboardingStepOne() {
         }}
       >
         <div>
-          <label
-            htmlFor="parentName"
-            className="mb-1.5 block text-sm font-medium text-[#2b2b2b]"
-          >
+          <label htmlFor="parentName" className="mb-1.5 block text-sm font-medium text-[#2b2b2b]">
             Parent&apos;s Full Name
           </label>
           <input
@@ -56,27 +69,7 @@ export default function OnboardingStepOne() {
         </div>
 
         <div>
-          <label
-            htmlFor="parentPhone"
-            className="mb-1.5 block text-sm font-medium text-[#2b2b2b]"
-          >
-            Parent&apos;s Phone Number
-          </label>
-          <input
-            id="parentPhone"
-            type="tel"
-            placeholder="(11) 91234-5678"
-            value={data.parentPhone}
-            onChange={(e) => updateParentInfo({ parentPhone: e.target.value })}
-            className="w-full rounded-xl border border-[#ece6da] bg-[#faf7f2] px-4 py-3 text-sm text-[#2b2b2b] placeholder:text-[#a8a8a8] focus:border-[#a3352b] focus:outline-none focus:ring-2 focus:ring-[#a3352b]/20"
-          />
-        </div>
-
-        <div>
-          <label
-            htmlFor="parentEmail"
-            className="mb-1.5 block text-sm font-medium text-[#2b2b2b]"
-          >
+          <label htmlFor="parentEmail" className="mb-1.5 block text-sm font-medium text-[#2b2b2b]">
             Parent&apos;s Email
           </label>
           <input
@@ -84,16 +77,19 @@ export default function OnboardingStepOne() {
             type="email"
             placeholder="nazi@example.com"
             value={data.parentEmail}
-            onChange={(e) => updateParentInfo({ parentEmail: e.target.value })}
+            onChange={(e) => {
+              updateParentInfo({ parentEmail: e.target.value });
+              if (emailError) setEmailError(null);
+            }}
             className="w-full rounded-xl border border-[#ece6da] bg-[#faf7f2] px-4 py-3 text-sm text-[#2b2b2b] placeholder:text-[#a8a8a8] focus:border-[#a3352b] focus:outline-none focus:ring-2 focus:ring-[#a3352b]/20"
           />
+          {emailError ? (
+            <p className="mt-1.5 text-sm font-medium text-[#a3352b]">{emailError}</p>
+          ) : null}
         </div>
 
         <div>
-          <label
-            htmlFor="password"
-            className="mb-1.5 block text-sm font-medium text-[#2b2b2b]"
-          >
+          <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-[#2b2b2b]">
             Password
           </label>
           <div className="relative">
@@ -111,11 +107,7 @@ export default function OnboardingStepOne() {
               className="absolute right-3 top-1/2 -translate-y-1/2 text-[#a8a8a8] hover:text-[#5a5a5a]"
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
         </div>
@@ -144,15 +136,15 @@ export default function OnboardingStepOne() {
 
         <button
           type="submit"
-          disabled={!canContinue}
+          disabled={!canContinue || isChecking}
           className="mt-2 w-full rounded-full bg-[#a3352b] py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#8c2c23] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Continue →
+          {isChecking ? "Checking..." : "Continue →"}
         </button>
 
         <p className="text-center text-sm text-[#8a8a8a]">
           Already have an account?{" "}
-          <a href="#" className="font-medium text-[#a3352b] hover:underline">
+          <a href="/auth/login" className="font-medium text-[#a3352b] hover:underline">
             Log in
           </a>
         </p>

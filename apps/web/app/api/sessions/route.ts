@@ -1,4 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  createE2eSession,
+  getE2eAuthState,
+  isE2eMode,
+  listE2eSessionsForUser,
+  toE2eReadingSession
+} from "@/lib/e2e/fixtures";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -16,6 +23,10 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  if (isE2eMode()) {
+    return handleE2eCreateSession(request);
+  }
+
   if (!hasSupabaseEnv()) {
     return errorResponse("configuration_error", "Supabase is not configured.", 500);
   }
@@ -54,6 +65,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  if (isE2eMode()) {
+    return handleE2eListSessions(request);
+  }
+
   if (!hasSupabaseEnv()) {
     return errorResponse("configuration_error", "Supabase is not configured.", 500);
   }
@@ -99,4 +114,59 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({ sessions: data.map(toReadingSession) });
+}
+
+async function handleE2eCreateSession(request: NextRequest) {
+  const body = await readJsonObject(request);
+  const parsedBody = body ? createSessionRequestSchema.safeParse(body) : null;
+
+  if (!parsedBody?.success) {
+    return validationErrorResponse();
+  }
+
+  const auth = getE2eAuthState(request.cookies);
+  if (auth.status === "unauthenticated") {
+    return errorResponse("unauthorized", "Authentication is required.", 401);
+  }
+
+  if (auth.status !== "authenticated" || auth.appUser.role !== "CHILD") {
+    return errorResponse("forbidden", "Only child accounts can create reading sessions.", 403);
+  }
+
+  return NextResponse.json(
+    { session: toE2eReadingSession(createE2eSession(auth.appUser.id)) },
+    { status: 201 }
+  );
+}
+
+function handleE2eListSessions(request: NextRequest) {
+  const parsedQuery = listSessionsQuerySchema.safeParse({
+    status: request.nextUrl.searchParams.get("status") ?? undefined,
+    limit: request.nextUrl.searchParams.get("limit") ?? undefined
+  });
+
+  if (!parsedQuery.success) {
+    return validationErrorResponse();
+  }
+
+  const auth = getE2eAuthState(request.cookies);
+  if (auth.status === "unauthenticated") {
+    return errorResponse("unauthorized", "Authentication is required.", 401);
+  }
+
+  if (auth.status !== "authenticated") {
+    return errorResponse("forbidden", "This account is not authorized.", 403);
+  }
+
+  let sessions = listE2eSessionsForUser(auth.appUser);
+
+  if (parsedQuery.data.status === "open") {
+    sessions = sessions.filter((session) => !session.end_time);
+  } else if (parsedQuery.data.status === "closed") {
+    sessions = sessions.filter((session) => session.end_time);
+  }
+
+  return NextResponse.json({
+    sessions: sessions.slice(0, parsedQuery.data.limit).map(toE2eReadingSession)
+  });
 }

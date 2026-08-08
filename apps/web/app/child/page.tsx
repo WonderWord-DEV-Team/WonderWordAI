@@ -1,29 +1,23 @@
-"use client";
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import {
+  getE2eAuthState,
+  getE2eChildProfile,
+  getE2eSiblingProfiles,
+  isE2eMode
+} from "@/lib/e2e/fixtures";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { ChildHomeClient } from "./ChildHomeClient";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef } from "react";
-import { Camera, Flame, Mic } from "lucide-react";
-import { WorksheetCapture } from "@/components/worksheet/WorksheetCapture";
-import { useChildSession } from "@/components/child/ChildSessionContext";
-import { useCreateSession, useOpenSessions } from "@/hooks/useSessions";
+export const dynamic = "force-dynamic";
 
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-type StoryWorld = {
-  name: string;
-  color: string;
-  emoji: string;
-};
-
-const STORY_WORLDS: StoryWorld[] = [
-  { name: "Space", color: "#2260e6", emoji: "🚀" },
-  { name: "Dinos", color: "#10a84e", emoji: "🦕" },
-  { name: "Fairy Tale", color: "#d2237d", emoji: "🏰" },
-  { name: "Heroes", color: "#e65100", emoji: "🦸" },
-  { name: "Food", color: "#6b21a8", emoji: "🍕" },
-  { name: "Animals", color: "#e6a100", emoji: "🐾" }
-];
+export default async function ChildHomePage() {
+  if (isE2eMode()) {
+    const auth = getE2eAuthState(cookies());
+    if (auth.status !== "authenticated" || auth.appUser.role !== "CHILD") {
+      redirect("/auth/login");
+    }
 
 type DailyRefreshCard = {
   title: string;
@@ -63,50 +57,68 @@ const DAILY_REFRESH_CARDS: DailyRefreshCard[] = [
     textAccent: "text-[#6b21a8]",
     href: null,
     action: "read-aloud"
+    const profile = getE2eChildProfile(auth.appUser.id);
+    return (
+      <ChildHomeClient
+        childName={profile?.name ?? "Reader"}
+        siblings={getE2eSiblingProfiles(auth.appUser.id)}
+      />
+    );
   }
-];
 
-function ComingSoonBadge() {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-slate-900/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white">
-      Coming soon
-    </span>
-  );
-}
-
-export default function ChildHomePage() {
-  const router = useRouter();
+  const supabase = createClient();
   const {
-    sessionId,
-    setSessionId,
-    childId,
-    setChildId,
-    worksheetStatus,
-    setWorksheetStatus,
-    setOcrResult
-  } = useChildSession();
-  const { data: openSessions } = useOpenSessions();
-  const { mutateAsync: createSession } = useCreateSession();
-  const sessionRequestRef = useRef<Promise<string> | null>(null);
+    data: { user }
+  } = await supabase.auth.getUser();
 
-  useEffect(() => {
-    if (childId) return;
-    if (!uuidPattern.test(sessionId)) return;
+  if (!user) {
+    redirect("/auth/login");
+  }
 
-    const match = openSessions?.find((session) => session.id === sessionId);
-    if (match) {
-      setChildId(match.childId);
+  const { data: childUser } = await supabase
+    .from("users")
+    .select("id")
+    .eq("auth_id", user.id)
+    .eq("role", "CHILD")
+    .single();
+
+  if (!childUser) {
+    redirect("/auth/login");
+  }
+
+  const { data: profile } = await supabase
+    .from("child_profiles")
+    .select("name")
+    .eq("child_id", childUser.id)
+    .single();
+
+  const admin = createAdminClient();
+  const { data: parentLink } = await admin
+    .from("parent_child")
+    .select("parent_id")
+    .eq("child_id", childUser.id)
+    .maybeSingle();
+
+  let siblings: { child_id: string; name: string }[] = [];
+  if (parentLink) {
+    const { data: allLinks } = await admin
+      .from("parent_child")
+      .select("child_id")
+      .eq("parent_id", parentLink.parent_id);
+
+    const otherChildIds = (allLinks ?? [])
+      .map((l) => l.child_id)
+      .filter((id) => id !== childUser.id);
+
+    if (otherChildIds.length > 0) {
+      const { data: siblingProfiles } = await admin
+        .from("child_profiles")
+        .select("child_id, name")
+        .in("child_id", otherChildIds);
+
+      siblings = siblingProfiles ?? [];
     }
-  }, [childId, sessionId, openSessions, setChildId]);
-
-  const ensureSession = useCallback(async () => {
-    if (uuidPattern.test(sessionId)) {
-      return sessionId;
-    }
-
-    if (sessionRequestRef.current) {
-      return sessionRequestRef.current;
-    }
+  }
 
     sessionRequestRef.current = createSession()
       .then((session) => {

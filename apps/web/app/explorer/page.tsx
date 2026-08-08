@@ -139,7 +139,7 @@ export default function WordExplorerPage() {
 
       <main className="flex-1 w-full max-w-[1280px] mx-auto px-6 md:px-[200px] py-12 flex flex-col justify-center items-start">
         <div className="w-full flex justify-start mb-6">
-          <Link href="/child/demo-session/read" className="flex items-center gap-2 text-sm font-bold text-[#a3352b] hover:text-[#8c2c23] transition-colors">
+          <Link href="/child" className="flex items-center gap-2 text-sm font-bold text-[#a3352b] hover:text-[#8c2c23] transition-colors">
             <LogOut className="h-4 w-4 transform rotate-180" />
             End Session
           </Link>

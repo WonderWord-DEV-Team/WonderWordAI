@@ -34,9 +34,10 @@ import {
   CalendarDays,
   Gauge,
   Lightbulb,
-  Rocket,
   Sparkles
 } from "lucide-react";
+import Link from "next/link";
+import { signOut } from "@/app/auth/actions";
 
 const PERIOD_OPTIONS: { label: string; value: ParentDashboardPeriod }[] = [
   { label: "7 days", value: "7d" },
@@ -432,35 +433,45 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
   return (
     <div className="min-h-screen bg-[#F4F1EA]">
       {/* ticket: implement printable activity card layout (css @media print) */}
-      <header className="border-b border-slate-200 bg-white print:hidden">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-1.5 text-lg font-bold text-rose-500">
-            <Rocket className="h-5 w-5" />
-            WonderWord AI
-          </div>
-          <nav className="hidden items-center gap-8 text-sm font-medium text-slate-500 md:flex">
-            <Link href="/" className="hover:text-slate-900">Home</Link>
-            <Link href="/explorer" className="font-semibold text-rose-500 hover:text-rose-600">Word Tools</Link>
-            <Link href="/parent/story-library" className="hover:text-slate-900">Story Library</Link>
-            <a href="#" className="hover:text-slate-900">Store</a>
-            <a href="#" className="hover:text-slate-900">Diagnostics</a>
+     <header className="border-b border-[#ecdfc9] bg-white print:hidden">
+        <div className="mx-auto flex max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] items-center justify-between px-6 py-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt="WonderWord AI" className="h-8 w-auto" />
+
+          <nav className="absolute left-1/2 hidden -translate-x-1/2 gap-8 text-sm font-medium text-[#4a4a4a] md:flex">
+            <a href="#" className="hover:text-[#2b2b2b]">Home</a>
+            <a href="#" className="hover:text-[#2b2b2b]">Story Library</a>
+            <a href="#" className="hover:text-[#2b2b2b]">Store</a>
+            <a href="#" className="border-b-2 border-[#a3352b] pb-1 font-bold text-[#2b2b2b]">Diagnostics</a>
           </nav>
+
           <div className="flex items-center gap-4">
-            <div className="hidden text-right text-xs leading-5 text-slate-500 sm:block">
-              <p className="max-w-52 truncate font-bold text-slate-700">{auth.email}</p>
-              <p className="font-extrabold uppercase tracking-[0.12em] text-rose-500">
+            <Link
+              href="/profiles"
+              className="rounded-full border border-[#ecdfc9] px-3 py-1.5 text-xs font-bold text-[#5a5a5a] transition hover:bg-[#faf7f2]"
+            >
+              Switch to Child
+            </Link>
+
+            <div className="hidden text-right text-xs leading-5 text-[#8a8a8a] sm:block">
+              <p className="max-w-52 truncate font-bold text-[#2b2b2b]">{auth.email}</p>
+              <p className="font-extrabold uppercase tracking-[0.12em] text-[#a3352b]">
                 {auth.role}
               </p>
             </div>
-            <SignOutButton />
-            <div className="grid h-8 w-8 place-items-center rounded-full bg-rose-100 text-xs font-black text-rose-500">
-              {auth.role.slice(0, 1)}
-            </div>
+            <form action={signOut}>
+              <button
+                type="submit"
+                className="rounded-full border border-[#ecdfc9] px-3 py-1.5 text-xs font-bold text-[#5a5a5a] transition hover:bg-[#faf7f2]"
+              >
+                Log Out
+              </button>
+            </form>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8 print:hidden">
+      <main className="mx-auto max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] px-6 py-8 print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap gap-2 rounded-full bg-slate-100 p-1">
             {PERIOD_OPTIONS.map((option) => (
@@ -468,11 +479,10 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
                 key={option.value}
                 type="button"
                 onClick={() => setPeriod(option.value)}
-                className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                  option.value === period
+                className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${option.value === period
                     ? "bg-rose-400 text-white shadow-sm"
                     : "text-slate-500 hover:text-slate-700"
-                }`}
+                  }`}
               >
                 {option.label}
               </button>
@@ -530,11 +540,10 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
                     key={child.id}
                     type="button"
                     onClick={() => setActiveChildId(child.id)}
-                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                      child.id === activeChild.id
+                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${child.id === activeChild.id
                         ? "bg-rose-400 text-white shadow-sm"
                         : "text-slate-500 hover:text-slate-700"
-                    }`}
+                      }`}
                   >
                     {child.name}
                   </button>
@@ -699,17 +708,18 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
         ) : null}
       </main>
 
-      <footer className="mt-12 border-t border-slate-200 bg-white py-8 print:hidden">
-        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 px-6 text-sm text-slate-500 sm:flex-row sm:items-center">
+      <footer className="mt-12 border-t border-[#f0e6d8] bg-white py-8 print:hidden">
+        <div className="mx-auto flex max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] flex-col items-start justify-between gap-4 px-6 text-sm text-[#8a8a8a] sm:flex-row sm:items-center">
           <div>
-            <p className="font-bold text-rose-500">WonderWord AI</p>
-            <p className="text-xs text-slate-400">© 2024 WonderWord AI.</p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="WonderWord AI" className="h-6 w-auto opacity-80" />
+            <p className="ml-1 mt-1 text-xs text-[#a8a8a8]">© 2026 WonderWord AI.</p>
           </div>
           <div className="flex gap-6 text-xs">
-            <a href="#" className="hover:text-slate-700">Privacy</a>
-            <a href="#" className="hover:text-slate-700">Terms</a>
-            <a href="#" className="hover:text-slate-700">Support</a>
-            <a href="#" className="hover:text-slate-700">About Us</a>
+            <a href="/privacy" className="hover:text-[#2b2b2b]">Privacy</a>
+            <a href="/terms" className="hover:text-[#2b2b2b]">Terms</a>
+            <a href="/help" className="hover:text-[#2b2b2b]">Support</a>
+            <a href="#" className="hover:text-[#2b2b2b]">About Us</a>
           </div>
         </div>
       </footer>

@@ -1,4 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  closeE2eSession,
+  findE2eSessionForChild,
+  getE2eAuthState,
+  isE2eMode,
+  toE2eReadingSession
+} from "@/lib/e2e/fixtures";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -21,7 +28,56 @@ type RouteContext = {
   };
 };
 
+export async function GET(_request: NextRequest, { params }: RouteContext) {
+  if (isE2eMode()) {
+    return handleE2eGetSession(_request, params.id);
+  }
+
+  if (!hasSupabaseEnv()) {
+    return errorResponse("configuration_error", "Supabase is not configured.", 500);
+  }
+
+  const parsedSessionId = sessionIdSchema.safeParse(params.id);
+
+  if (!parsedSessionId.success) {
+    return validationErrorResponse();
+  }
+
+  const supabase = createClient();
+  const { appUser, response } = await getAuthenticatedAppUser(supabase);
+
+  if (response) {
+    return response;
+  }
+
+  if (appUser.role !== "CHILD") {
+    return errorResponse("not_found", "Reading session not found.", 404);
+  }
+
+  const { data: session, error: sessionError } = await supabase
+    .from("reading_sessions")
+    .select(READING_SESSION_SELECT)
+    .eq("id", parsedSessionId.data)
+    .maybeSingle<ReadingSessionRow>();
+
+  if (sessionError) {
+    console.error("Failed to fetch reading session.", sessionError);
+
+    return errorResponse("internal_error", "Unable to verify the reading session.", 500);
+  }
+
+  if (!session || session.child_id !== appUser.id) {
+    return errorResponse("not_found", "Reading session not found.", 404);
+  }
+
+  return NextResponse.json({ session: toReadingSession(session) });
+}
+
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
+  if (isE2eMode()) {
+    return handleE2eCloseSession(request, params.id);
+  }
+
   if (!hasSupabaseEnv()) {
     return errorResponse("configuration_error", "Supabase is not configured.", 500);
   }
@@ -105,4 +161,61 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   }
 
   return NextResponse.json({ session: toReadingSession(refreshedSession) });
+}
+
+function handleE2eGetSession(request: NextRequest, sessionId: string) {
+  const parsedSessionId = sessionIdSchema.safeParse(sessionId);
+
+  if (!parsedSessionId.success) {
+    return validationErrorResponse();
+  }
+
+  const auth = getE2eAuthState(request.cookies);
+  if (auth.status === "unauthenticated") {
+    return errorResponse("unauthorized", "Authentication is required.", 401);
+  }
+
+  if (auth.status !== "authenticated" || auth.appUser.role !== "CHILD") {
+    return errorResponse("not_found", "Reading session not found.", 404);
+  }
+
+  const session = findE2eSessionForChild(parsedSessionId.data, auth.appUser.id);
+
+  if (!session) {
+    return errorResponse("not_found", "Reading session not found.", 404);
+  }
+
+  return NextResponse.json({ session: toE2eReadingSession(session) });
+}
+
+async function handleE2eCloseSession(request: NextRequest, sessionId: string) {
+  const parsedSessionId = sessionIdSchema.safeParse(sessionId);
+
+  if (!parsedSessionId.success) {
+    return validationErrorResponse();
+  }
+
+  const body = await readJsonObject(request);
+  const parsedBody = body ? closeSessionRequestSchema.safeParse(body) : null;
+
+  if (!parsedBody?.success) {
+    return validationErrorResponse();
+  }
+
+  const auth = getE2eAuthState(request.cookies);
+  if (auth.status === "unauthenticated") {
+    return errorResponse("unauthorized", "Authentication is required.", 401);
+  }
+
+  if (auth.status !== "authenticated" || auth.appUser.role !== "CHILD") {
+    return errorResponse("not_found", "Reading session not found.", 404);
+  }
+
+  const session = closeE2eSession(parsedSessionId.data, auth.appUser.id);
+
+  if (!session) {
+    return errorResponse("not_found", "Reading session not found.", 404);
+  }
+
+  return NextResponse.json({ session: toE2eReadingSession(session) });
 }

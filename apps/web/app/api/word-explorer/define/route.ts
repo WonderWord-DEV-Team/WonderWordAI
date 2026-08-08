@@ -38,9 +38,9 @@ export async function POST(request: NextRequest) {
         return authResponse;
     }
 
-    // if (appUser.role !== "CHILD") {
-    //     return apiErrorResponse("forbidden", "Only child accounts can use Word Explorer.", 403);
-    // }
+    if (appUser.role !== "CHILD") {
+        return apiErrorResponse("forbidden", "Only child accounts can use Word Explorer.", 403);
+    }
 
     const mlServiceUrl = process.env.ML_SERVICE_URL;
     const mlServiceKey = process.env.ML_SERVICE_KEY;
@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
         });
 
         if (!response.ok) {
+            console.error(`ml-service /word-definition returned ${response.status}`);
             return apiErrorResponse("upstream_error", "Could not look up that word right now.", 502);
         }
 

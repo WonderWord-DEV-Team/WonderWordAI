@@ -7,12 +7,6 @@ import {
   BookOpenCheck,
   Users,
   BookOpen,
-  Bone,
-  Rocket,
-  PawPrint,
-  Zap,
-  Palette,
-  Music,
   Plus,
   X,
 } from "lucide-react";
@@ -21,19 +15,10 @@ import MascotBubble from "@/components/onboarding/MascotBubble";
 import { useOnboarding } from "@/components/onboarding/OnboardingContext";
 
 const READING_LEVELS = [
-  { id: " rting", label: "Just starting", icon: Baby },
+  { id: "starting", label: "Just starting", icon: Baby },
   { id: "simple", label: "Simple words", icon: BookOpen },
   { id: "help", label: "With help", icon: Users },
   { id: "independent", label: "Independent", icon: BookOpenCheck },
-];
-
-const INTERESTS = [
-  { id: "dinosaurs", label: "Dinosaurs", icon: Bone },
-  { id: "space", label: "Space", icon: Rocket },
-  { id: "animals", label: "Animals", icon: PawPrint },
-  { id: "superheroes", label: "Superheroes", icon: Zap },
-  { id: "art", label: "Art", icon: Palette },
-  { id: "music", label: "Music", icon: Music },
 ];
 
 function targetChildCount(childCount: string) {
@@ -44,8 +29,7 @@ function targetChildCount(childCount: string) {
 
 export default function OnboardingStepTwo() {
   const router = useRouter();
-  const { data, updateChild, toggleChildInterest, addChild, removeChild } =
-    useOnboarding();
+  const { data, updateChild, addChild, removeChild } = useOnboarding();
 
   // Seed the right number of blank child cards based on what was picked in step 1.
   useEffect(() => {
@@ -169,35 +153,6 @@ export default function OnboardingStepTwo() {
                     {label}
                   </button>
                 ))}
-              </div>
-            </div>
-
-            <div className="mt-5">
-              <p className="mb-2 text-sm font-medium text-[#2b2b2b]">
-                Interests{" "}
-                <span className="font-normal text-[#8a8a8a]">
-                  (Select as many as they like!)
-                </span>
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {INTERESTS.map(({ id, label, icon: Icon }) => {
-                  const active = child.interests.includes(id);
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => toggleChildInterest(index, id)}
-                      className={`flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition ${
-                        active
-                          ? "border-[#e8c84a] bg-[#fdf3d8] text-[#8a6d1d]"
-                          : "border-[#ece6da] bg-white text-[#5a5a5a] hover:border-[#e0c9c6]"
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" />
-                      {label}
-                    </button>
-                  );
-                })}
               </div>
             </div>
           </div>

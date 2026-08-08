@@ -38,6 +38,12 @@ export async function listSessions(filters?: SessionFilters) {
   return sessionsResponseSchema.parse(payload).sessions;
 }
 
+export async function getReadingSession(sessionId: string) {
+  const payload = await apiFetchJson<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}`);
+
+  return sessionResponseSchema.parse(payload).session;
+}
+
 export async function createReadingSession() {
   const payload = await apiFetchJson<unknown>("/api/sessions", {
     method: "POST",

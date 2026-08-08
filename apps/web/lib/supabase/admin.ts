@@ -22,3 +22,20 @@ export function createAdminClient() {
     }
   });
 }
+
+/**
+ * Ephemeral, non-persisting client — used ONLY to call signInAnonymously()
+ * to properly provision an anonymous auth user (is_anonymous: true).
+ * Its session is discarded immediately; it never touches browser cookies,
+ * so it can't clobber whatever session (e.g. the parent's) is active.
+ */
+export function createEphemeralAnonClient() {
+  const { url, publishableKey } = getSupabaseEnv();
+
+  return createSupabaseClient(url, publishableKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+}

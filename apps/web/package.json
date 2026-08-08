@@ -8,6 +8,9 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit --project tsconfig.typecheck.json",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
     "test:live": "if [ \"$RUN_LIVE_API_TESTS\" != \"true\" ]; then echo \"Skipping live API tests: set RUN_LIVE_API_TESTS=true to run.\"; else vitest run --config vitest.live.config.ts; fi",
     "test:auth": "tsc --module commonjs --target es2022 --moduleResolution node --esModuleInterop --skipLibCheck --strict --noEmit false --outDir .test-output --rootDir . lib/supabase/middleware.test.ts lib/supabase/middleware-policy.ts lib/supabase/middleware-cookies.ts lib/auth/types.ts && node .test-output/lib/supabase/middleware.test.js",
     "test:karaoke": "tsc --module commonjs --target es2022 --moduleResolution node --esModuleInterop --skipLibCheck --strict --noEmit false --outDir .test-output --rootDir . lib/karaoke/timeline.test.ts lib/karaoke/timeline.ts lib/audio/schema.ts && node .test-output/lib/karaoke/timeline.test.js",
@@ -32,6 +35,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "^20.14.15",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",

@@ -28,10 +28,24 @@ npm run test
 npm run test:auth
 npm run test:karaoke
 npm run test:narration
+npm run test:e2e
 npm run typecheck
 npm run lint
 npm run build
 ```
+
+Browser E2E uses Playwright Chromium and runs against a local Next.js server with test-only
+synthetic auth/session fixtures:
+
+```bash
+npx playwright install chromium
+npm run test:e2e
+npm run test:e2e:ui
+npm run test:e2e:report
+```
+
+The E2E server sets `WONDERWORD_E2E=1` and does not use production Supabase or paid providers.
+See `../../docs/week4-e2e-auth-session.md` for the fixture accounts and route matrix.
 
 Live API tests are isolated behind an explicit flag and are skipped by default:
 
