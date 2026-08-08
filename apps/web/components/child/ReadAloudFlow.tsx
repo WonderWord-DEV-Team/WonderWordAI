@@ -12,8 +12,12 @@ const wordData = {
   highlightWord: "grass",
 };
 
-export default function ReadAloudFlow({ monsterName = "name" }: { monsterName?: string }) {
-  const [stage, setStage] = useState<Stage>("idle");
+export default function ReadAloudFlow({
+  monsterName = "name",
+}: {
+  monsterName?: string;
+}) {
+  const [stage, setStage] = useState("idle");
   const [typedWord, setTypedWord] = useState("");
 
   const sentenceParts = wordData.sentence.split(
@@ -23,7 +27,7 @@ export default function ReadAloudFlow({ monsterName = "name" }: { monsterName?: 
   const renderSentence = () =>
     sentenceParts.map((part, i) =>
       part.toLowerCase() === wordData.highlightWord ? (
-        <span key={i} className="text-[#E8604F] font-bold">
+        <span key={i} className="font-black text-[#E8604F]">
           {part}
         </span>
       ) : (
@@ -32,7 +36,7 @@ export default function ReadAloudFlow({ monsterName = "name" }: { monsterName?: 
     );
 
   return (
-    <div className="min-h-screen bg-[#FDF8F2] flex flex-col">
+    <div className="min-h-screen flex flex-col">
       <AppHeader />
 
       <div className="flex-1 flex flex-col items-center px-6 py-10">
@@ -63,7 +67,7 @@ export default function ReadAloudFlow({ monsterName = "name" }: { monsterName?: 
                   setStage("idle");
                 }}
                 aria-label="Clear"
-                className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-900 font-bold text-lg"
+                className="absolute right-6 top-1/2 -translate-y-1/2 min-w-[48px] min-h-[48px] flex items-center justify-center text-gray-900 font-bold text-lg"
               >
                 ✕
               </button>
@@ -84,7 +88,9 @@ export default function ReadAloudFlow({ monsterName = "name" }: { monsterName?: 
               <p className="mt-4 text-sm text-gray-500">
                 Tap to hear [{monsterName}] say it!
               </p>
-              <p className="mt-3 text-6xl font-black text-gray-900">{wordData.word}</p>
+              <p className="mt-3 text-6xl font-black text-gray-900">
+                {wordData.word}
+              </p>
 
               <p className="mt-8 text-xs font-bold text-gray-400 uppercase tracking-wide">
                 In a sentence
@@ -135,7 +141,9 @@ export default function ReadAloudFlow({ monsterName = "name" }: { monsterName?: 
                 🔊 Hear [{monsterName}] say it
               </button>
               <button
-                onClick={() => setStage(Math.random() > 0.3 ? "correct" : "incorrect")}
+                onClick={() =>
+                  setStage(Math.random() > 0.3 ? "correct" : "incorrect")
+                }
                 className="flex items-center gap-2 rounded-full bg-black text-white font-black px-6 py-3 min-h-[48px]"
               >
                 ⬛ Stop recording
