@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { SessionAudioMiscue } from "@/lib/audio/schema";
 
 type Tab = "story" | "phonics" | "listen" | "practice";
@@ -16,6 +16,13 @@ type CorrectionModalProps = {
   storyText: string;
   miscues: SessionAudioMiscue[];
   onDone: () => void;
+};
+
+type PhonicsLookupResult = {
+  category: string;
+  rule_explanation: string;
+  examples: string[];
+  similarity_score: number;
 };
 
 function normalizeWord(word: string) {
@@ -114,12 +121,18 @@ export default function CorrectionModal({
           onClick={handleContinue}
           className="w-full min-h-[48px] bg-[#008C9A] text-white rounded-xl font-semibold"
         >
-          {isLastMiscue ? "Continue to results" : "Next word →"}
+          {isLastMiscue
+            ? "Continue to results"
+            : "Next word →"}
         </button>
       </div>
     </div>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/* Story                                                                       */
+/* -------------------------------------------------------------------------- */
 
 function StoryTab({
   storyText,
@@ -136,7 +149,9 @@ function StoryTab({
     [miscues]
   );
 
-  const words = storyText.split(/\s+/).filter(Boolean);
+  const words = storyText
+    .split(/\s+/)
+    .filter(Boolean);
 
   return (
     <div className="flex flex-col gap-4">
@@ -154,6 +169,7 @@ function StoryTab({
             ) : (
               <span>{word}</span>
             )}
+
             {" "}
           </span>
         ))}
@@ -162,11 +178,157 @@ function StoryTab({
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* Phonics                                                                     */
+/* -------------------------------------------------------------------------- */
+
 function PhonicsTab({
   miscue,
 }: {
   miscue: SessionAudioMiscue | null;
 }) {
+  const [result, setResult] =
+    useState<PhonicsLookupResult | null>(null);
+
+  const [isLoading, setIsLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function lookupPhonics() {
+      if (!miscue?.word) {
+        setResult(null);
+        setError(null);
+        return;
+      }
+
+      /*
+       * IMPORTANT:
+       *
+       * The phonics lookup is based on the TARGET WORD,
+       * not on the child's phoneme output.
+       *
+       * Example:
+       *
+       *   miscue.word = "enormous"
+       *   actualPhonemes = what the child said
+       *
+       * We lookup "enormous" in the phonics knowledge base.
+       */
+
+      const word = normalizeWord(miscue.word);
+
+      if (!word) {
+        setResult(null);
+        setError(
+          "We couldn't identify this word."
+        );
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+      setResult(null);
+
+      try {
+        const response = await fetch(
+          "/api/phonics-lookup",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              stuck_word: word,
+
+              /*
+               * This is optional context.
+               *
+               * It tells the phonics service what the child
+               * actually said, but DOES NOT replace the target
+               * word used for the lookup.
+               */
+              error_description:
+                miscue.actualPhonemes
+                  ? `Child pronunciation: ${miscue.actualPhonemes}`
+                  : undefined,
+            }),
+          }
+        );
+
+        const data = await response
+          .json()
+          .catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error?.message ||
+              "No phonics rule was found for this word."
+          );
+        }
+
+        if (!cancelled) {
+          setResult(
+            data as PhonicsLookupResult
+          );
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Unable to load phonics information."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void lookupPhonics();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    miscue?.word,
+    miscue?.actualPhonemes,
+  ]);
+
+  /*
+   * Hear the correct pronunciation of the target word.
+   *
+   * This is separate from the phonics lookup.
+   * The lookup gives the instructional rule;
+   * speech synthesis lets the child hear the word.
+   */
+  const speak = (text: string) => {
+    if (
+      typeof window === "undefined" ||
+      !window.speechSynthesis
+    ) {
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const utterance =
+      new SpeechSynthesisUtterance(text);
+
+    utterance.rate = 0.8;
+    utterance.lang = "en-US";
+
+    window.speechSynthesis.speak(
+      utterance
+    );
+  };
+
   if (!miscue) {
     return (
       <p className="text-sm text-gray-500 text-center">
@@ -177,53 +339,138 @@ function PhonicsTab({
 
   return (
     <div className="flex flex-col gap-5">
+
+      {/* Target word */}
       <div className="text-center">
         <p className="text-xs text-gray-400 uppercase tracking-wide">
           Practice word
         </p>
 
-        <p className="text-3xl font-bold text-gray-900 mt-1">
-          {miscue.word}
-        </p>
-      </div>
+        <div className="mt-1 flex items-center justify-center gap-3">
+          <p className="text-3xl font-bold text-gray-900">
+            {miscue.word}
+          </p>
 
-      <div className="flex justify-center gap-6">
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-xs text-gray-400">
-            You said
-          </span>
-
-          <span className="bg-red-100 text-red-600 font-semibold rounded-full px-4 py-2 text-lg">
-            {miscue.actualPhonemes || "—"}
-          </span>
-        </div>
-
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-xs text-gray-400">
-            The word is
-          </span>
-
-          <span className="bg-[#E6F5F6] text-[#008C9A] font-semibold rounded-full px-4 py-2 text-lg">
-            {miscue.expectedPhonemes || "—"}
-          </span>
+          <button
+            type="button"
+            onClick={() =>
+              speak(miscue.word)
+            }
+            aria-label={`Hear correct pronunciation of ${miscue.word}`}
+            className="w-11 h-11 rounded-full bg-[#E6F5F6] text-[#008C9A] flex items-center justify-center hover:bg-[#d7eff1] transition"
+          >
+            🔊
+          </button>
         </div>
       </div>
 
-      {miscue.phonicsCategory ? (
-        <p className="text-xs text-gray-400 text-center">
-          Focus skill: {miscue.phonicsCategory}
-        </p>
-      ) : null}
+      {/* Loading state */}
+      {isLoading && (
+        <div className="rounded-xl bg-[#FAFAFA] p-4 text-center">
+          <p className="text-sm text-gray-500">
+            Finding the phonics pattern...
+          </p>
+        </div>
+      )}
 
-      {miscue.similarityScore !== undefined ? (
-        <p className="text-xs text-gray-400 text-center">
-          Similarity:{" "}
-          {Math.round(miscue.similarityScore * 100)}%
+      {/* Error state */}
+      {error && !isLoading && (
+        <div className="rounded-xl bg-amber-50 p-4 text-center">
+          <p className="text-sm text-amber-700">
+            {error}
+          </p>
+
+          <p className="mt-1 text-xs text-amber-600">
+            The word can still be practiced
+            using the pronunciation above.
+          </p>
+        </div>
+      )}
+
+      {/* Correct phonics information */}
+      {result && !isLoading && (
+        <>
+          {/* Phonics skill */}
+          <div className="rounded-xl bg-[#E6F5F6] p-4">
+            <p className="text-xs text-[#008C9A] uppercase tracking-wide font-semibold">
+              Phonics skill
+            </p>
+
+            <p className="mt-1 text-base font-bold text-gray-900">
+              {result.category}
+            </p>
+          </div>
+
+          {/* Rule explanation */}
+          <div className="rounded-xl bg-[#FAFAFA] p-4">
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">
+              How the word works
+            </p>
+
+            <p className="mt-2 text-sm leading-relaxed text-gray-700">
+              {result.rule_explanation}
+            </p>
+          </div>
+
+          {/* Example words */}
+          {result.examples &&
+            result.examples.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-2">
+                  More words with this pattern
+                </p>
+
+                <div className="flex flex-wrap gap-2">
+                  {result.examples
+                    .slice(0, 6)
+                    .map((example) => (
+                      <button
+                        key={example}
+                        type="button"
+                        onClick={() =>
+                          speak(example)
+                        }
+                        className="rounded-full bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition"
+                      >
+                        {example} 🔊
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
+
+          {/* Similarity */}
+          {result.similarity_score !==
+            undefined && (
+            <p className="text-xs text-gray-400 text-center">
+              Phonics match:{" "}
+              {Math.round(
+                result.similarity_score * 100
+              )}
+              %
+            </p>
+          )}
+        </>
+      )}
+
+      {/* Child's pronunciation */}
+      <div className="rounded-xl border border-gray-100 p-4">
+        <p className="text-xs text-gray-400 uppercase tracking-wide">
+          Your pronunciation
         </p>
-      ) : null}
+
+        <p className="mt-1 text-sm text-red-600 font-semibold">
+          {miscue.actualPhonemes ||
+            "Not available"}
+        </p>
+      </div>
     </div>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/* Listen                                                                      */
+/* -------------------------------------------------------------------------- */
 
 function ListenTab({
   storyText,
@@ -251,12 +498,17 @@ function ListenTab({
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* Practice                                                                    */
+/* -------------------------------------------------------------------------- */
+
 function PracticeTab({
   miscue,
 }: {
   miscue: SessionAudioMiscue | null;
 }) {
-  const [isListening, setIsListening] = useState(false);
+  const [isListening, setIsListening] =
+    useState(false);
 
   if (!miscue) {
     return (
@@ -268,6 +520,7 @@ function PracticeTab({
 
   return (
     <div className="flex flex-col items-center gap-4">
+
       <p className="text-xs text-gray-400 uppercase tracking-wide">
         Say the highlighted word
       </p>
@@ -279,13 +532,16 @@ function PracticeTab({
       </div>
 
       <p className="text-xs text-gray-400">
-        Expected: {miscue.expectedPhonemes || "—"}
+        Expected:{" "}
+        {miscue.expectedPhonemes || "—"}
       </p>
 
       <button
         type="button"
         aria-label="Start recording"
-        onClick={() => setIsListening((prev) => !prev)}
+        onClick={() =>
+          setIsListening((prev) => !prev)
+        }
         className="relative w-20 h-20 min-h-[48px] flex items-center justify-center"
       >
         {isListening && (
