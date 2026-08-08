@@ -4,6 +4,7 @@ from typing import Annotated, Optional
 import textstat
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from services.supabase_service import get_supabase_client
 
@@ -164,15 +165,22 @@ async def validate_story(
     known_words = request.known_words
     if known_words is None:
         known_words = []
-        try:
+
+        # supabase.table().execute() is blocking network I/O -- run it off
+        # the event loop thread so it can't stall other concurrent requests
+        # (e.g. /transcribe) while it waits on the network.
+        def _fetch_known_words():
             supabase = get_supabase_client()
-            result = (
+            return (
                 supabase.table("child_known_words")
                 .select("words")
                 .eq("child_id", request.child_id)
                 .limit(1)
                 .execute()
             )
+
+        try:
+            result = await run_in_threadpool(_fetch_known_words)
             if result.data:
                 known_words = [str(w) for w in (result.data[0].get("words") or [])]
         except Exception:

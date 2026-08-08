@@ -6,11 +6,11 @@ import { LogOut, Volume2, Mic } from "lucide-react";
 export default function ReadingModePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedWorld, setSelectedWorld] = useState<string | null>("Space");
-  const [isReading, setIsReading] = useState(false);
-  const [showBubble, setShowBubble] = useState(false);
-  const [showErrorPopup, setShowErrorPopup] = useState(false);
-  const [showPracticePopup, setShowPracticePopup] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [isReading, setIsReading] = useState(true);
+  const [showBubble, setShowBubble] = useState(true);
+  const [showErrorPopup, setShowErrorPopup] = useState(true);
+  const [showPracticePopup, setShowPracticePopup] = useState(true);
+  const [showSuccess, setShowSuccess] = useState(true);
 
   const handleToggleReading = () => {
     if (isReading) {

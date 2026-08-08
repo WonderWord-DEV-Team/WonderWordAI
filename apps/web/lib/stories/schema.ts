@@ -68,6 +68,7 @@ export function parseStoryModelResponse(rawOutput: string) {
 
   if (!result.success) {
     return {
+
       success: false as const,
       error: result.error
     };
@@ -83,8 +84,9 @@ export const validateStoryResponseSchema = z.object({
   is_valid: z.boolean(),
   validation_score: z.number().int().min(0).max(100),
   errors: z.array(z.string()),
+  warnings: z.array(z.string()).default([]),
   guardrails: z.object({
-    vocabulary: z.enum(["passed", "failed"]),
+    vocabulary: z.enum(["passed", "failed", "warning"]),
     complexity: z.enum(["passed", "failed"]),
     content_safety: z.enum(["passed", "failed"]),
     structure: z.enum(["passed", "failed"])

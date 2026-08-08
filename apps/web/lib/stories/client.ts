@@ -70,11 +70,30 @@ export async function generateStoryWithClaude({
     maxRetries: 0
   });
 
-  const promptText = `Generate a story with the following requirements:
-- Target Word: "${word}"
-- Phonics Category: "${phonicsCategory}"
-- Theme: "${theme || "General Adventure"}"
-${knownWords.length > 0 ? `- Familiar/Known Words to include if possible: ${knownWords.join(", ")}` : ""}`;
+  const feedbackLine =
+    feedback && feedback.length > 0
+      ? `Your previous attempt FAILED these checks -- fix every one of them this time:\n${feedback.map((line) => `- ${line}`).join("\n")}`
+      : "";
+
+  const groundingLine = phonicsGrounding
+  ? `Phonics focus for this word: ${phonicsGrounding.ruleExplanation}${
+      phonicsGrounding.examples.length > 0
+        ? ` Related words for this pattern (only use these if they are also in the known words list): ${phonicsGrounding.examples.join(", ")}.`
+        : ""
+    }`
+  : "";
+
+const promptText = [
+  `Generate a story with the following requirements:`,
+  `- Target Word: "${word}"`,
+  `- Phonics Category: "${phonicsCategory}"`,
+  `- Theme: "${theme || "General Adventure"}"`,
+  knownWords.length > 0 ? `- Familiar/Known Words to include if possible: ${knownWords.join(", ")}` : "",
+  groundingLine,
+  feedbackLine
+]
+  .filter(Boolean)
+  .join("\n");
 
   const response = await anthropic.messages.create(
     {

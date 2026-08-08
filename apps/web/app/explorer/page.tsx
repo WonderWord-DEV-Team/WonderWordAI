@@ -38,6 +38,8 @@ export default function WordExplorerPage() {
     setHasSearched(true);
     setDefinition(null);
 
+    // Fire both lookups in parallel — the child shouldn't wait for one
+    // to finish before the other starts.
     const definitionPromise = fetch("/api/word-explorer/define", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -179,7 +181,7 @@ export default function WordExplorerPage() {
 
         {hasSearched && submittedWord && isLoading && (
           <div className="w-full max-w-[990px] flex items-center justify-center py-16 text-lg font-semibold text-[#8a8a8a]">
-            Looking up &ldquo;{submittedWord}&rdquo;...
+            Looking up &quot;{submittedWord}&quot;...
           </div>
         )}
 
@@ -193,6 +195,8 @@ export default function WordExplorerPage() {
               </div>
 
               <div className="p-8 flex flex-col sm:flex-row gap-8 items-stretch">
+                {/* Left side: real illustration when available, otherwise a soft
+                    placeholder so the layout doesn't jump. */}
                 <div className="w-full sm:w-[220px] min-h-[220px] sm:min-h-0 rounded-[10px] overflow-hidden bg-[#f0e6d8] flex items-center justify-center">
                   {definition.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element

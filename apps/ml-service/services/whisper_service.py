@@ -1,116 +1,107 @@
 import os
-import shutil
 import tempfile
-from pathlib import Path
+import whisperx
 
-from config import DEVICE, HF_TOKEN, MODEL_NAME
+from config import MODEL_NAME, DEVICE
+
+# WhisperX shells out to the literal `ffmpeg` command to decode audio. On
+# machines without ffmpeg on PATH, copy the static binary bundled by
+# imageio-ffmpeg to a standard "ffmpeg" filename and add it to PATH, since
+# WhisperX invokes it by that exact name (imageio-ffmpeg's own filename won't
+# match).
+try:
+    import shutil
+    import imageio_ffmpeg
+
+    if shutil.which("ffmpeg") is None:
+        bundled_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        ffmpeg_dir = os.path.dirname(bundled_exe)
+        standard_name = os.path.join(ffmpeg_dir, "ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+
+        if not os.path.exists(standard_name):
+            shutil.copy2(bundled_exe, standard_name)
+
+        os.environ["PATH"] = ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
+except Exception as exc:
+    print(f"Could not configure bundled ffmpeg fallback: {exc}")
 
 model = None
-align_models = {}
+# Alignment models are keyed by language code so each language is only loaded once.
+_align_models: dict[str, tuple] = {}
 
 
 class WhisperModelLoadError(RuntimeError):
     pass
 
 
-def _ensure_ffmpeg_on_path() -> None:
-    if shutil.which("ffmpeg"):
-        return
-
-    try:
-        import imageio_ffmpeg
-    except ModuleNotFoundError:
-        return
-
-    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-    shim_dir = Path(tempfile.gettempdir()) / "wonderwordai-ffmpeg"
-    shim_dir.mkdir(exist_ok=True)
-    shim_path = shim_dir / "ffmpeg.exe"
-    if not shim_path.exists():
-        shutil.copy2(ffmpeg_exe, shim_path)
-
-    os.environ["PATH"] = f"{shim_dir}{os.pathsep}{os.environ.get('PATH', '')}"
-
-
 def load_whisper_model():
     global model
 
     if model is None:
-        _ensure_ffmpeg_on_path()
-
-        import whisperx
-
-        print("Loading Whisper model...")
+        print(f"Loading WhisperX model ({MODEL_NAME})...")
 
         try:
             model = whisperx.load_model(
                 MODEL_NAME,
-                DEVICE,
-                use_auth_token=HF_TOKEN,
+                DEVICE
             )
-        except RuntimeError as exc:
-            message = str(exc)
+        except Exception as exc:
+            raise WhisperModelLoadError(
+                f"Could not load Whisper model {MODEL_NAME!r}: {exc}"
+            ) from exc
 
-            if "model.bin" in message:
-                raise WhisperModelLoadError(
-                    "WhisperX could not load MODEL_NAME="
-                    f"{MODEL_NAME!r}. WhisperX/faster-whisper expects a "
-                    "CTranslate2 Whisper model containing model.bin, or one "
-                    "of the built-in model names like 'small'."
-                ) from exc
+        print("WhisperX model loaded.")
 
-            raise
-
-        print("Whisper loaded.")
-
-    return model
+    # Warm the alignment model for the common case so the first real request
+    # after startup isn't the one that pays the (slow) load cost.
+    load_align_model("en")
 
 
-def get_model():
-    return model
-
-
-def _load_align_model(language: str):
-    global align_models
-
-    if language not in align_models:
-        import whisperx
-
-        model_dir = Path(__file__).resolve().parent.parent / ".cache" / "whisperx-align"
-        model_dir.mkdir(parents=True, exist_ok=True)
-
-        print(f"Loading Whisper alignment model for language={language!r}...")
-        align_models[language] = whisperx.load_align_model(
-            language_code=language,
-            device=DEVICE,
-            model_dir=str(model_dir),
+def load_align_model(language_code: str):
+    if language_code not in _align_models:
+        print(f"Loading WhisperX alignment model (language={language_code!r})...")
+        _align_models[language_code] = whisperx.load_align_model(
+            language_code=language_code,
+            device=DEVICE
         )
-        print("Whisper alignment model loaded.")
+        print("WhisperX alignment model loaded.")
 
-    return align_models[language]
+    return _align_models[language_code]
 
 
-def transcribe_audio(audio_path: str):
-    import whisperx
+def transcribe_audio(audio_file):
+    global model
 
-    whisper_model = load_whisper_model()
-    # Reading sessions are English. Skipping uncertain language detection also
-    # improves recognition of very short recordings and single words.
-    result = whisper_model.transcribe(audio_path, language="en")
+    if model is None:
+        load_whisper_model()
 
-    if not result.get("segments"):
-        return result
+    if isinstance(audio_file, str):
+        temp_path = audio_file
+        should_remove = False
+    else:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp:
+            temp.write(audio_file.file.read())
+            temp_path = temp.name
+        should_remove = True
 
-    language = result.get("language")
-    if not language:
-        return result
+    result = model.transcribe(temp_path)
 
-    align_model, metadata = _load_align_model(language)
-    return whisperx.align(
+    # Step 2: Reuse the cached alignment model for this language (loading it is slow).
+    align_model, metadata = load_align_model(result["language"])
+
+    # Step 3: Word-level alignment
+    aligned = whisperx.align(
         result["segments"],
         align_model,
         metadata,
-        audio_path,
-        DEVICE,
-        return_char_alignments=False,
+        temp_path,
+        DEVICE
     )
+
+    if should_remove:
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
+
+    return aligned
