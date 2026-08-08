@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'supabase/migrations/**'
+  workflow_dispatch: {}
 
 jobs:
   migrate-staging:
@@ -18,11 +19,7 @@ jobs:
           version: latest
 
       - name: Apply migrations to staging
-        run: |
-          supabase link --project-ref ${{ secrets.SUPABASE_STAGING_PROJECT_REF }}
-          supabase db push --yes
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase db push --db-url "${{ secrets.SUPABASE_STAGING_DB_URL }}" --yes
 
   migrate-dev:
     runs-on: ubuntu-latest
@@ -35,8 +32,4 @@ jobs:
           version: latest
 
       - name: Apply migrations to dev
-        run: |
-          supabase link --project-ref ${{ secrets.SUPABASE_DEV_PROJECT_REF }}
-          supabase db push --yes
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase db push --db-url "${{ secrets.SUPABASE_DEV_DB_URL }}" --yes
