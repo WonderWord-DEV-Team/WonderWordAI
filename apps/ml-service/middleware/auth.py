@@ -8,10 +8,11 @@ PROTECTED_PATHS = {
     "/transcribe",
     "/detect-miscue",
     "/activity-recommendation",
+    "/phonics-lookup",
     "/narrate",
     "/validate-story",
-    "/word-definition",
     "/themed-story",
+    "/word-definition",
 }
 
 

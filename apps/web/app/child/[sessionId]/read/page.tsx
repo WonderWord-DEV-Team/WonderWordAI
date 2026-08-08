@@ -8,7 +8,13 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function ChildReadPage() {
+type ChildReadPageProps = {
+  params: {
+    sessionId: string;
+  };
+};
+
+export default async function ChildReadPage({ params }: ChildReadPageProps) {
   const auth = await requireRole("CHILD");
-  return <ChildReadingShell auth={auth} />;
+  return <ChildReadingShell auth={auth} routeSessionId={params.sessionId} />;
 }

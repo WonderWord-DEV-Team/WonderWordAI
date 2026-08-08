@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   closeReadingSession,
   createReadingSession,
+  getReadingSession,
   listSessions
 } from "@/lib/sessions/client";
 import { sessionQueryKeys, type SessionFilters } from "@/lib/sessions/keys";
@@ -17,6 +18,14 @@ export function useSessions(filters?: SessionFilters) {
 
 export function useOpenSessions() {
   return useSessions({ status: "open" });
+}
+
+export function useSession(sessionId: string | null) {
+  return useQuery({
+    queryKey: [...sessionQueryKeys.all, "detail", sessionId],
+    queryFn: () => getReadingSession(sessionId ?? ""),
+    enabled: Boolean(sessionId)
+  });
 }
 
 export function useCreateSession() {

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { getE2eAuthState, isE2eMode } from "@/lib/e2e/fixtures";
 import { parseUserRole } from "@/lib/auth/types";
 import { getSupabaseEnv, hasSupabaseEnv } from "@/lib/supabase/env";
 import { copyCookies } from "@/lib/supabase/middleware-cookies";
@@ -39,6 +40,22 @@ export async function updateSession(request: NextRequest) {
   });
 
   const pathname = request.nextUrl.pathname;
+
+  if (isE2eMode()) {
+    const auth = getE2eAuthState(request.cookies);
+    const decision =
+      auth.status === "authenticated"
+        ? classifyMiddlewareRequest(pathname, { status: "authenticated", role: auth.appUser.role })
+        : classifyMiddlewareRequest(pathname, { status: auth.status });
+
+    if (decision.kind !== "redirect") {
+      return supabaseResponse;
+    }
+
+    return decision.pathname === "/auth/login"
+      ? redirectToLogin(request, supabaseResponse, decision.error)
+      : redirectWithCookies(request, supabaseResponse, decision.pathname);
+  }
 
   if (!hasSupabaseEnv()) {
     const decision = classifyMiddlewareRequest(pathname, { status: "unauthenticated" });

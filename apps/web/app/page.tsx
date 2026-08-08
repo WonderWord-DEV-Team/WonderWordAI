@@ -121,9 +121,18 @@ export default function Home() {
     <main className="bg-[#FFF9F2]">
       {/* Header */}
       <header className="flex items-center justify-between px-6 sm:px-12 py-6">
-        <Image src="/landing-assets/logo.svg" alt="WonderWord AI" width={170} height={38} priority />
+        <Image
+          src="/landing-assets/logo.svg"
+          alt="WonderWord AI"
+          width={170}
+          height={38}
+          priority
+        />
         <nav className="hidden sm:flex items-center gap-10 text-sm font-semibold text-gray-600">
-          <a href="#" className="text-[#E8604F] border-b-2 border-[#E8604F] pb-1">
+          <a
+            href="#"
+            className="text-[#E8604F] border-b-2 border-[#E8604F] pb-1"
+          >
             Home
           </a>
           <a href="#how-it-works" className="hover:text-[#E8604F]">
@@ -197,7 +206,9 @@ export default function Home() {
 
       {/* Benefits */}
       <section className="px-6 sm:px-12 py-20">
-        <h2 className="text-center text-[32px] font-black text-[#1A1A2E]">Magic in Every Page</h2>
+        <h2 className="text-center text-[32px] font-black text-[#1A1A2E]">
+          Magic in Every Page
+        </h2>
 
         <div className="mt-12 grid sm:grid-cols-3 gap-5 max-w-5xl mx-auto">
           {benefits.map((b) => (
@@ -216,9 +227,17 @@ export default function Home() {
                   {b.tag}
                 </span>
               )}
-              {b.tag && b.title !== "Scan any worksheet" && <p className="text-2xl">{b.tag}</p>}
-              <h3 className="mt-4 text-xl font-black text-[#1A1A2E]">{b.title}</h3>
-              {b.desc && <p className="mt-2 text-sm leading-5 text-gray-600 max-w-sm">{b.desc}</p>}
+              {b.tag && b.title !== "Scan any worksheet" && (
+                <p className="text-2xl">{b.tag}</p>
+              )}
+              <h3 className="mt-4 text-xl font-black text-[#1A1A2E]">
+                {b.title}
+              </h3>
+              {b.desc && (
+                <p className="mt-2 text-sm leading-5 text-gray-600 max-w-sm">
+                  {b.desc}
+                </p>
+              )}
               {b.title === "Parent Dashboard" && (
                 <div className="mt-4 bg-white rounded-xl p-4 shadow-sm w-full sm:w-44">
                   <div className="flex items-center justify-between text-xs">
@@ -226,7 +245,10 @@ export default function Home() {
                     <span className="font-black text-[#0F9C8E]">85%</span>
                   </div>
                   <div className="mt-2 h-2 rounded-full bg-gray-100">
-                    <div className="h-2 rounded-full bg-[#0F9C8E]" style={{ width: "85%" }} />
+                    <div
+                      className="h-2 rounded-full bg-[#0F9C8E]"
+                      style={{ width: "85%" }}
+                    />
                   </div>
                 </div>
               )}
@@ -237,8 +259,12 @@ export default function Home() {
 
       {/* How It Works */}
       <section id="how-it-works" className="px-6 sm:px-12 py-20">
-        <h2 className="text-center text-[32px] font-black text-[#1A1A2E]">How It Works</h2>
-        <p className="mt-2 text-center text-[15px] text-gray-500">3 simple steps — no tech skills needed</p>
+        <h2 className="text-center text-[32px] font-black text-[#1A1A2E]">
+          How It Works
+        </h2>
+        <p className="mt-2 text-center text-[15px] text-gray-500">
+          3 simple steps — no tech skills needed
+        </p>
 
         <div className="mt-14 relative max-w-4xl mx-auto">
           <div className="hidden sm:block absolute top-6 left-[16%] right-[16%] border-t-2 border-dashed border-[#E8604F]/40" />
@@ -250,7 +276,9 @@ export default function Home() {
                 </div>
                 <p className="mt-4 text-3xl">{s.emoji}</p>
                 <h3 className="mt-3 font-black text-[#1A1A2E]">{s.title}</h3>
-                <p className="mt-2 text-sm leading-5 text-gray-500 max-w-[220px] mx-auto">{s.desc}</p>
+                <p className="mt-2 text-sm leading-5 text-gray-500 max-w-[220px] mx-auto">
+                  {s.desc}
+                </p>
               </div>
             ))}
           </div>
@@ -259,8 +287,12 @@ export default function Home() {
 
       {/* Pricing — working Monthly/Annual toggle */}
       <section id="pricing" className="px-6 sm:px-12 py-20">
-        <h2 className="text-center text-[32px] font-black text-[#1A1A2E]">Simple, Honest Pricing</h2>
-        <p className="mt-2 text-center text-[15px] text-gray-500">Start free. Upgrade when you&apos;re ready.</p>
+        <h2 className="text-center text-[32px] font-black text-[#1A1A2E]">
+          Simple, Honest Pricing
+        </h2>
+        <p className="mt-2 text-center text-[15px] text-gray-500">
+          Start free. Upgrade when you&apos;re ready.
+        </p>
 
         <div className="mt-6 flex justify-center">
           <div className="inline-flex items-center gap-1 bg-white border border-gray-200 rounded-full p-1">
@@ -268,8 +300,10 @@ export default function Home() {
               type="button"
               onClick={() => setCycle("monthly")}
               aria-pressed={cycle === "monthly"}
-              className={`px-4 py-1.5 rounded-full text-sm font-bold transition ${
-                cycle === "monthly" ? "bg-[#1A1A2E] text-white shadow-sm" : "text-gray-500 hover:text-gray-800"
+              className={`min-h-[48px] px-4 py-1.5 rounded-full text-sm font-bold transition ${
+                cycle === "monthly"
+                  ? "bg-[#1A1A2E] text-white shadow-sm"
+                  : "text-gray-500 hover:text-gray-800"
               }`}
             >
               Monthly
@@ -278,8 +312,10 @@ export default function Home() {
               type="button"
               onClick={() => setCycle("yearly")}
               aria-pressed={cycle === "yearly"}
-              className={`px-4 py-1.5 rounded-full text-sm font-bold transition ${
-                cycle === "yearly" ? "bg-[#1A1A2E] text-white shadow-sm" : "text-gray-500 hover:text-gray-800"
+              className={`min-h-[48px] px-4 py-1.5 rounded-full text-sm font-bold transition ${
+                cycle === "yearly"
+                  ? "bg-[#1A1A2E] text-white shadow-sm"
+                  : "text-gray-500 hover:text-gray-800"
               }`}
             >
               Annual
@@ -292,9 +328,13 @@ export default function Home() {
 
         <div className="mt-10 grid sm:grid-cols-3 gap-6 max-w-5xl mx-auto items-start">
           {plans.map((plan) => {
-            const price = cycle === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
+            const price =
+              cycle === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
             return (
-              <div key={plan.name} className={`relative rounded-3xl p-7 ${plan.cardStyle} ${plan.textStyle}`}>
+              <div
+                key={plan.name}
+                className={`relative rounded-3xl p-7 ${plan.cardStyle} ${plan.textStyle}`}
+              >
                 {plan.badge && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#1A1A2E] text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-full whitespace-nowrap">
                     {plan.badge}
@@ -306,7 +346,9 @@ export default function Home() {
                   <span className="text-sm font-bold">/mo</span>
                 </p>
                 {cycle === "yearly" && price > 0 && (
-                  <p className="mt-1 text-xs font-bold opacity-80">Billed annually</p>
+                  <p className="mt-1 text-xs font-bold opacity-80">
+                    Billed annually
+                  </p>
                 )}
                 <ul className="mt-5 space-y-2.5 text-sm">
                   {plan.features.map((f) => (
@@ -315,7 +357,9 @@ export default function Home() {
                     </li>
                   ))}
                 </ul>
-                <button className={`mt-7 w-full rounded-full py-3 font-black text-sm ${plan.ctaStyle}`}>
+                <button
+                  className={`mt-7 w-full rounded-full py-3 font-black text-sm ${plan.ctaStyle}`}
+                >
                   {plan.cta}
                 </button>
               </div>
@@ -326,13 +370,20 @@ export default function Home() {
 
       {/* Testimonials */}
       <section className="px-6 sm:px-12 py-20">
-        <h2 className="text-center text-[32px] font-black text-[#1A1A2E]">Parents Love WonderWord</h2>
+        <h2 className="text-center text-[32px] font-black text-[#1A1A2E]">
+          Parents Love WonderWord
+        </h2>
 
         <div className="mt-12 grid sm:grid-cols-3 gap-5 max-w-5xl mx-auto">
           {reviews.map((r) => (
-            <div key={r.name} className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+            <div
+              key={r.name}
+              className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm"
+            >
               <p className="text-[#F5A623] text-sm tracking-wide">★★★★★</p>
-              <p className="mt-3 text-sm leading-6 italic text-gray-600">&ldquo;{r.quote}&rdquo;</p>
+              <p className="mt-3 text-sm leading-6 italic text-gray-600">
+                &ldquo;{r.quote}&rdquo;
+              </p>
               <div className="mt-5 flex items-center gap-2">
                 <span className={`w-8 h-8 rounded-full ${r.avatarColor}`} />
                 <p className="text-sm font-bold text-gray-800">{r.name}</p>
@@ -344,7 +395,9 @@ export default function Home() {
 
       {/* FAQ */}
       <section className="px-6 sm:px-12 py-20">
-        <h2 className="text-center text-[32px] font-black text-[#1A1A2E]">Questions? We&apos;ve got answers.</h2>
+        <h2 className="text-center text-[32px] font-black text-[#1A1A2E]">
+          Questions? We&apos;ve got answers.
+        </h2>
 
         <div className="mt-12 max-w-2xl mx-auto grid gap-3">
           {questions.map((q, i) => (
@@ -355,7 +408,9 @@ export default function Home() {
               className="w-full flex items-center justify-between rounded-full border border-gray-200 bg-white px-6 py-4 text-left text-sm font-bold text-gray-800 hover:bg-gray-50"
             >
               {q}
-              <span className="text-gray-400">{openFaq === i ? "︿" : "﹀"}</span>
+              <span className="text-gray-400">
+                {openFaq === i ? "︿" : "﹀"}
+              </span>
             </button>
           ))}
         </div>
@@ -373,13 +428,20 @@ export default function Home() {
         >
           Start Free Today
         </Link>
-        <p className="mt-3 text-xs text-white/80 font-semibold">No credit card required</p>
+        <p className="mt-3 text-xs text-white/80 font-semibold">
+          No credit card required
+        </p>
       </section>
 
       {/* Footer */}
       <footer className="px-6 sm:px-12 py-10 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div>
-          <Image src="/landing-assets/logo.svg" alt="WonderWord AI" width={140} height={30} />
+          <Image
+            src="/landing-assets/logo.svg"
+            alt="WonderWord AI"
+            width={140}
+            height={30}
+          />
           <p className="text-xs text-gray-400 mt-2">© 2024 WonderWord AI.</p>
         </div>
         <nav className="flex gap-6 text-sm font-bold text-gray-500">
