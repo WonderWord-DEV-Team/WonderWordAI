@@ -60,12 +60,24 @@ export default defineConfig({
         {
           name: "chromium-small-iphone-375",
           testMatch: smokeTestMatch,
-          use: { ...devices["iPhone SE"], viewport: { width: 375, height: 667 } }
+          use: {
+            ...devices["Desktop Chrome"],
+            viewport: { width: 375, height: 667 },
+            isMobile: true,
+            hasTouch: true,
+            deviceScaleFactor: 2
+          }
         },
         {
           name: "chromium-tablet-768",
           testMatch: smokeTestMatch,
-          use: { ...devices["iPad (gen 7)"], viewport: { width: 768, height: 1024 } }
+          use: {
+            ...devices["Desktop Chrome"],
+            viewport: { width: 768, height: 1024 },
+            isMobile: true,
+            hasTouch: true,
+            deviceScaleFactor: 2
+          }
         },
         {
           name: "webkit-desktop-1440",

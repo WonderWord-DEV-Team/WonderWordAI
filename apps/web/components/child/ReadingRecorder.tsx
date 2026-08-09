@@ -45,6 +45,7 @@
   }
 
   const MAX_RECORDING_MS = 30_000;
+  const AUDIO_PROCESSING_TIMEOUT_MS = 15_000;
 
   export function ReadingRecorder({
     sessionId,
@@ -330,11 +331,14 @@
       setMessage("Listening back to your reading...");
 
       try {
-        const result = await uploadSessionAudio({
-          sessionId: nextSessionId,
-          audio: audioBlob,
-          referenceText: worksheetText
-        });
+        const result = await withTimeout(
+          uploadSessionAudio({
+            sessionId: nextSessionId,
+            audio: audioBlob,
+            referenceText: worksheetText
+          }),
+          AUDIO_PROCESSING_TIMEOUT_MS
+        );
         const timeline = buildKaraokeTimeline({
           worksheetText: worksheetText ?? "",
           audio: result
@@ -638,7 +642,28 @@
     return window.localStorage.getItem("__wonderwordE2eMedia") === "1";
   }
 
+  async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+    let timeoutId: number | null = null;
+
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<never>((_, reject) => {
+          timeoutId = window.setTimeout(() => reject(new Error("audio_processing_timeout")), timeoutMs);
+        })
+      ]);
+    } finally {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    }
+  }
+
   function mapProcessingError(error: unknown) {
+    if (error instanceof Error && error.message === "audio_processing_timeout") {
+      return "Reading feedback took too long. Please try recording again.";
+    }
+
     if (error instanceof ApiError) {
       switch (error.code) {
         case "invalid_audio_type":

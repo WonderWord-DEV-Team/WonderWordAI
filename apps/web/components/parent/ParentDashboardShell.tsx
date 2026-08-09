@@ -437,7 +437,7 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt="WonderWord AI" className="h-8 w-auto" />
 
-          <nav className="absolute left-1/2 hidden -translate-x-1/2 gap-8 text-sm font-medium text-[#4a4a4a] md:flex">
+          <nav className="absolute left-1/2 hidden -translate-x-1/2 gap-8 text-sm font-medium text-[#4a4a4a] lg:flex">
             <a href="#" className="hover:text-[#2b2b2b]">Home</a>
             <a href="#" className="hover:text-[#2b2b2b]">Story Library</a>
             <a href="#" className="hover:text-[#2b2b2b]">Store</a>

@@ -57,7 +57,7 @@ test("parent smoke: login entry, dashboard, child report cards, navigation, logo
   runtime.assertClean();
 });
 
-test("child smoke: worksheet upload, OCR, recording, correction modal, close session", async ({
+test("child smoke: worksheet upload, OCR, recording stop, close session", async ({
   page,
   context
 }) => {
