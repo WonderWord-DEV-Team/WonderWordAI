@@ -4,7 +4,7 @@ from fastapi import FastAPI
 
 from services.whisper_service import load_whisper_model
 from middleware.auth import InternalKeyMiddleware
-
+from routers.narrate import router as narrate_router
 from routers.detect_miscue import router as detect_miscue_router
 from routers.transcribe import router as transcribe_router
 from routers.phonics_lookup import router as phonics_router
