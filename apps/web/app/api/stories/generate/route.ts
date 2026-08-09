@@ -102,6 +102,38 @@ export async function POST(request: NextRequest) {
     console.error("Error retrieving child known words.", error);
   }
 
+  // ticket: allow Dolch/Fry sight words for children with a small known-words list
+  // A child with few tracked known words would otherwise get almost no usable
+  // vocabulary here, causing Claude to guess at ordinary words that then fail
+  // the /validate-story vocabulary guardrail. Mirror the same augmentation the
+  // guardrail itself applies (see apps/ml-service/routers/validate_story.py)
+  // so Claude is actually told what's allowed, instead of only finding out
+  // after the fact via failed-attempt feedback.
+  const KNOWN_WORDS_AUGMENT_THRESHOLD = 500;
+  if (knownWords.length < KNOWN_WORDS_AUGMENT_THRESHOLD) {
+    try {
+      const { data: curriculumData, error: curriculumError } = await supabase
+        .from("curriculum_words")
+        .select("word")
+        .in("list_name", ["dolch", "fry"]);
+
+      if (curriculumError) {
+        console.error("Failed to fetch curriculum words.", curriculumError);
+      } else if (Array.isArray(curriculumData)) {
+        const curriculumWords = curriculumData
+          .map((row) => (row as { word?: string }).word)
+          .filter((w): w is string => Boolean(w));
+        knownWords = Array.from(new Set([...knownWords, ...curriculumWords]));
+      }
+    } catch (error) {
+      // if curriculum words can't be fetched, fall back to whatever
+      // knownWords we already have rather than failing the whole request
+      console.error("Error retrieving curriculum words.", error);
+    }
+  }
+
+  const knownWordsSet = new Set(knownWords.map((w) => w.toLowerCase()));
+
   // ticket: implement /api/stories/generate orchestration (known-words -> sonnet -> validate -> image -> store)
   // PHONICS RAG GROUNDING (best-effort) -- POST /phonics-lookup already does the
   // pgvector similarity search over phonics_knowledge; we just consume its top
@@ -116,7 +148,11 @@ export async function POST(request: NextRequest) {
     if (topMatch) {
       phonicsGrounding = {
         ruleExplanation: topMatch.phonics_rule,
-        examples: topMatch.example_words
+        // Only suggest example words Claude is actually allowed to use --
+        // otherwise these are exactly the kind of words (e.g. CVC drill
+        // words like "bag"/"cap"/"sam") that keep failing the vocabulary
+        // guardrail after the fact.
+        examples: topMatch.example_words.filter((example) => knownWordsSet.has(example.toLowerCase()))
       };
       resolvedPhonicsCategory ??= topMatch.category;
     }
