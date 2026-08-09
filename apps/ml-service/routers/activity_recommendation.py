@@ -1,11 +1,15 @@
+import os
 from typing import Annotated
 
+from anthropic import Anthropic
 from fastapi import APIRouter, Header
 from pydantic import BaseModel
 
 from services.supabase_service import get_supabase_client
 
 router = APIRouter()
+
+anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 # ticket: integrate playful practice recommendations into parent dashboard
 # per docs/api-contract.md, unknown/missing categories must still return 200
@@ -45,12 +49,55 @@ FALLBACK_ACTIVITY = {
             "title": "Switch rooms",
             "description": "Move to a new room and see if you can find three more."
         }
-    ]
+    ],
+    "recommendation": None
 }
 
 
 class ActivityRecommendationRequest(BaseModel):
     phonics_category: str
+
+
+def _generate_personalized_recommendation(activity: dict) -> str | None:
+    """Best-effort personalization via Claude. Never blocks the response —
+    if this fails for any reason, the caller falls back to the static
+    pedagogy text already stored in Supabase."""
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return None
+
+    try:
+        response = anthropic_client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=500,
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Write a personalized recommendation for a parent doing "
+                        "this reading activity with their child. Keep it under "
+                        "200 words total. Use markdown with short bullet points, "
+                        "not long paragraphs. Include exactly these three short "
+                        "sections: why it helps, how to do it at home, and one "
+                        "quick tip for success.\n\n"
+                        f"Title: {activity.get('title')}\n"
+                        f"Description: {activity.get('description')}\n"
+                        f"Pedagogy: {activity.get('pedagogy')}"
+                    )
+                }
+            ]
+        )
+        text_block = next(
+            (block for block in response.content if block.type == "text"),
+            None
+        )
+        return text_block.text.strip() if text_block else None
+    except Exception as e:
+        import traceback
+        print("=== CLAUDE PERSONALIZATION ERROR ===")
+        print(f"{type(e).__name__}: {e}")
+        traceback.print_exc()
+        print("=====================================")
+        return None
 
 
 @router.post("/activity-recommendation")
@@ -76,7 +123,9 @@ async def activity_recommendation(
         if not result.data:
             return FALLBACK_ACTIVITY
 
-        return result.data[0]
+        activity = result.data[0]
+        activity["recommendation"] = _generate_personalized_recommendation(activity)
+        return activity
     except Exception:
         # keep the dashboard from ever erroring, even if the lookup itself fails
         return FALLBACK_ACTIVITY
