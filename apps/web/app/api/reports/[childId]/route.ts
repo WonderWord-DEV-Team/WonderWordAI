@@ -3,6 +3,13 @@ import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { errorResponse, getAuthenticatedAppUser } from "@/lib/sessions/api";
 import {
+  e2eIds,
+  e2eReportDeficits,
+  getE2eAuthState,
+  getE2eLinkedChildIds,
+  isE2eMode
+} from "@/lib/e2e/fixtures";
+import {
   buildFallbackChildReport,
   buildGeneratedChildReport,
   GENERATED_REPORT_SELECT,
@@ -27,6 +34,10 @@ type RouteContext = {
 const LIVE_DEFICIT_LIMIT = 5;
 
 export async function GET(_request: NextRequest, { params }: RouteContext) {
+  if (isE2eMode()) {
+    return handleE2eChildReport(_request, params.childId);
+  }
+
   if (!hasSupabaseEnv()) {
     return errorResponse("configuration_error", "Supabase is not configured.", 500);
   }
@@ -109,6 +120,45 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
   }
 
   return NextResponse.json(parsedResponse.data);
+}
+
+function handleE2eChildReport(request: NextRequest, rawChildId: string) {
+  const parsedChildId = reportChildIdParamSchema.safeParse(rawChildId);
+
+  if (!parsedChildId.success) {
+    return errorResponse("invalid_request", "The request is invalid.", 400);
+  }
+
+  const childId = parsedChildId.data;
+  const auth = getE2eAuthState(request.cookies);
+
+  if (auth.status === "unauthenticated") {
+    return errorResponse("unauthorized", "Authentication is required.", 401);
+  }
+
+  if (auth.status !== "authenticated") {
+    return errorResponse("forbidden", "This account is not authorized.", 403);
+  }
+
+  if (auth.appUser.role === "CHILD" && auth.appUser.id !== childId) {
+    return errorResponse("forbidden", "You can only view your own report.", 403);
+  }
+
+  if (auth.appUser.role === "PARENT" && !getE2eLinkedChildIds(auth.appUser.id).includes(childId)) {
+    return errorResponse("forbidden", "You are not authorized to view this report.", 403);
+  }
+
+  const report =
+    childId === e2eIds.childOne
+      ? {
+          ...buildFallbackChildReport(childId, e2eReportDeficits),
+          wcpm: 82,
+          wcpmDelta: 6,
+          accuracyPct: 91
+        }
+      : buildFallbackChildReport(childId, []);
+
+  return NextResponse.json({ data: report });
 }
 
 async function fetchLiveDeficits(

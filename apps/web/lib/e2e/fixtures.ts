@@ -30,6 +30,7 @@ export type E2eAuthState =
 export const e2eIds = {
   parentOne: "10000000-0000-4000-8000-000000000001",
   childOne: "20000000-0000-4000-8000-000000000001",
+  childLongName: "20000000-0000-4000-8000-000000000003",
   parentTwo: "10000000-0000-4000-8000-000000000002",
   childTwo: "20000000-0000-4000-8000-000000000002",
   openSession: "40000000-0000-4000-8000-000000000001",
@@ -40,6 +41,7 @@ export const e2eIds = {
 export const e2eAuthIds = {
   parentOne: "e2e-auth-parent-one",
   childOne: "e2e-auth-child-one",
+  childLongName: "e2e-auth-child-long-name",
   parentTwo: "e2e-auth-parent-two",
   childTwo: "e2e-auth-child-two",
   missingProfile: "e2e-auth-missing-profile",
@@ -49,6 +51,7 @@ export const e2eAuthIds = {
 const authAccounts: E2eAuthAccount[] = [
   { authId: e2eAuthIds.parentOne, email: "parent.one@example.test" },
   { authId: e2eAuthIds.childOne, email: "child.one@example.test" },
+  { authId: e2eAuthIds.childLongName, email: "long.child@example.test" },
   { authId: e2eAuthIds.parentTwo, email: "parent.two@example.test" },
   { authId: e2eAuthIds.childTwo, email: "child.two@example.test" },
   { authId: e2eAuthIds.missingProfile, email: "missing.profile@example.test" },
@@ -71,6 +74,13 @@ const appUsers: E2eAppUser[] = [
     name: "E2E Child One"
   },
   {
+    id: e2eIds.childLongName,
+    authId: e2eAuthIds.childLongName,
+    email: "long.child@example.test",
+    role: "CHILD",
+    name: "E2E Child With A Wonderfully Long Practice Name"
+  },
+  {
     id: e2eIds.parentTwo,
     authId: e2eAuthIds.parentTwo,
     email: "parent.two@example.test",
@@ -88,6 +98,7 @@ const appUsers: E2eAppUser[] = [
 
 const parentChild = [
   { parentId: e2eIds.parentOne, childId: e2eIds.childOne },
+  { parentId: e2eIds.parentOne, childId: e2eIds.childLongName },
   { parentId: e2eIds.parentTwo, childId: e2eIds.childTwo }
 ];
 
@@ -191,7 +202,7 @@ export function getE2eChildProfile(childId: string) {
   return user?.role === "CHILD" ? { child_id: user.id, name: user.name, grade: 2 } : null;
 }
 
-export function getE2eLinkedChildIds(parentId: string) {
+export function getE2eLinkedChildIds(parentId: string): string[] {
   return parentChild.filter((link) => link.parentId === parentId).map((link) => link.childId);
 }
 
@@ -287,3 +298,16 @@ export const e2eWorksheetText =
   "The moon glows over the quiet lake. Sam reads every bright word aloud.";
 
 export const e2eImageKeywords = ["moon", "lake", "reading"];
+
+export const e2eReportDeficits = [
+  {
+    phonicsCategory: "long_vowels",
+    miscueCount: 4,
+    avgSimilarity: 0.72
+  },
+  {
+    phonicsCategory: "consonant_blends",
+    miscueCount: 2,
+    avgSimilarity: 0.81
+  }
+];

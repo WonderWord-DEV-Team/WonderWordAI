@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit --project tsconfig.typecheck.json",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:cross-browser": "WONDERWORD_CROSS_BROWSER=1 playwright test e2e/smoke e2e/responsive",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
     "test:live": "if [ \"$RUN_LIVE_API_TESTS\" != \"true\" ]; then echo \"Skipping live API tests: set RUN_LIVE_API_TESTS=true to run.\"; else vitest run --config vitest.live.config.ts; fi",

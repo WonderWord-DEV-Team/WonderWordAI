@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { errorResponse, getAuthenticatedAppUser, readJsonObject } from "@/lib/sessions/api";
+import { getE2eAuthState, getE2eLinkedChildIds, isE2eMode } from "@/lib/e2e/fixtures";
 import {
   practiceRecommendationRequestSchema,
   type PracticeErrorCode
@@ -12,6 +13,10 @@ export const dynamic = "force-dynamic";
 
 // ticket: integrate playful practice recommendations into parent dashboard
 export async function POST(request: NextRequest) {
+  if (isE2eMode()) {
+    return handleE2ePracticeRecommendation(request);
+  }
+
   if (!hasSupabaseEnv()) {
     return localErrorResponse("configuration_error", "Supabase is not configured.", 500);
   }
@@ -115,6 +120,44 @@ export async function POST(request: NextRequest) {
       500
     );
   }
+}
+
+async function handleE2ePracticeRecommendation(request: NextRequest) {
+  const body = await readJsonObject(request);
+  if (!body) {
+    return localErrorResponse("invalid_request", "The request payload is invalid.", 400);
+  }
+
+  const parsedRequest = practiceRecommendationRequestSchema.safeParse(body);
+  if (!parsedRequest.success) {
+    return localErrorResponse("invalid_request", "childId and phonicsCategory are required.", 400);
+  }
+
+  const auth = getE2eAuthState(request.cookies);
+  if (auth.status !== "authenticated" || auth.appUser.role !== "PARENT") {
+    return localErrorResponse("forbidden", "Only parent accounts can request practice activities.", 403);
+  }
+
+  if (!getE2eLinkedChildIds(auth.appUser.id).includes(parsedRequest.data.childId)) {
+    return localErrorResponse("forbidden", "You are not authorized to access this child.", 403);
+  }
+
+  return NextResponse.json({
+    data: {
+      title: "Long Vowel Treasure Map",
+      description: "A short offline practice game for the selected focus sound.",
+      pedagogy: "Use retrieval practice with playful repetition.",
+      phonicsCategory: parsedRequest.data.phonicsCategory,
+      durationMinutes: 8,
+      materials: [{ icon: "paper", label: "Paper" }],
+      exampleWords: ["glows", "lake", "bright"],
+      steps: [
+        { title: "Find", description: "Circle each matching sound in the sentence." },
+        { title: "Read", description: "Read the words aloud twice." }
+      ],
+      recommendation: "Keep the activity short and celebrate accurate rereads."
+    }
+  });
 }
 
 function localErrorResponse(code: PracticeErrorCode, message: string, status: number) {

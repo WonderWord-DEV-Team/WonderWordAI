@@ -433,21 +433,21 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
     <div className="min-h-screen bg-[#F4F1EA]">
       {/* ticket: implement printable activity card layout (css @media print) */}
       <header className="border-b border-[#ecdfc9] bg-white print:hidden">
-        <div className="mx-auto flex max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt="WonderWord AI" className="h-8 w-auto" />
 
-          <nav className="absolute left-1/2 hidden -translate-x-1/2 gap-8 text-sm font-medium text-[#4a4a4a] md:flex">
+          <nav className="absolute left-1/2 hidden -translate-x-1/2 gap-8 text-sm font-medium text-[#4a4a4a] lg:flex">
             <a href="#" className="hover:text-[#2b2b2b]">Home</a>
             <a href="#" className="hover:text-[#2b2b2b]">Story Library</a>
             <a href="#" className="hover:text-[#2b2b2b]">Store</a>
             <a href="#" className="border-b-2 border-[#a3352b] pb-1 font-bold text-[#2b2b2b]">Diagnostics</a>
           </nav>
 
-          <div className="flex items-center gap-4">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:gap-4">
             <Link
               href="/profiles"
-              className="rounded-full border border-[#ecdfc9] px-3 py-1.5 text-xs font-bold text-[#5a5a5a] transition hover:bg-[#faf7f2]"
+              className="inline-flex min-h-10 items-center rounded-full border border-[#ecdfc9] px-3 py-1.5 text-xs font-bold text-[#5a5a5a] transition hover:bg-[#faf7f2]"
             >
               Switch to Child
             </Link>
@@ -461,7 +461,7 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
             <form action={signOut}>
               <button
                 type="submit"
-                className="rounded-full border border-[#ecdfc9] px-3 py-1.5 text-xs font-bold text-[#5a5a5a] transition hover:bg-[#faf7f2]"
+                className="min-h-10 rounded-full border border-[#ecdfc9] px-3 py-1.5 text-xs font-bold text-[#5a5a5a] transition hover:bg-[#faf7f2]"
               >
                 Log Out
               </button>
@@ -516,18 +516,18 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
         ) : activeChild ? (
           <>
             <div className="mt-6 flex flex-wrap items-center gap-4">
-              <div className="flex rounded-full bg-slate-100 p-1">
+              <div className="flex max-w-full flex-wrap rounded-2xl bg-slate-100 p-1 sm:rounded-full">
                 {children.map((child) => (
                   <button
                     key={child.id}
                     type="button"
                     onClick={() => setActiveChildId(child.id)}
-                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${child.id === activeChild.id
+                    className={`min-h-10 max-w-full rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${child.id === activeChild.id
                       ? "bg-rose-400 text-white shadow-sm"
                       : "text-slate-500 hover:text-slate-700"
                       }`}
                   >
-                    {child.name}
+                    <span className="block max-w-56 truncate">{child.name}</span>
                   </button>
                 ))}
               </div>

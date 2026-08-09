@@ -38,7 +38,14 @@
     onTranscriptionComplete: (result: SessionAudioData) => void;
   };
 
+  declare global {
+    interface Window {
+      __wonderwordE2eMedia?: boolean;
+    }
+  }
+
   const MAX_RECORDING_MS = 30_000;
+  const AUDIO_PROCESSING_TIMEOUT_MS = 15_000;
 
   export function ReadingRecorder({
     sessionId,
@@ -57,6 +64,8 @@
     const recordingLimitRef = useRef<number | null>(null);
     const playbackButtonRef = useRef<HTMLButtonElement | null>(null);
     const timelineRef = useRef<KaraokeTimeline | null>(null);
+    const activeMimeTypeRef = useRef<string | null>(null);
+    const e2eRecordingRef = useRef<{ sessionId: string; mimeType: string } | null>(null);
     const isMountedRef = useRef(true);
     const shouldSubmitRecordingRef = useRef(false);
     const [recordingState, setRecordingState] = useState<RecordingState>("idle");
@@ -173,19 +182,12 @@
           recorderRef.current.stop();
         }
         recorderRef.current = null;
+        activeMimeTypeRef.current = null;
+        e2eRecordingRef.current = null;
         stopStream();
         revokeObjectUrl();
       };
     }, [cancelAnimationFrameLoop, clearRecordingLimit, revokeObjectUrl, stopStream]);
-
-    const stopRecording = useCallback(() => {
-      if (recordingState !== "recording") {
-        return;
-      }
-
-      clearRecordingLimit();
-      recorderRef.current?.stop();
-    }, [clearRecordingLimit, recordingState]);
 
     const handleStartRecording = async () => {
       if (!canStartRecording) {
@@ -193,6 +195,33 @@
           setRecordingState("error");
           setMessage("Scan your worksheet first so the words are ready.");
         }
+        return;
+      }
+
+      if (isE2eSyntheticMediaEnabled()) {
+        clearAudio();
+        chunksRef.current = [];
+        setRecordingState("requesting_permission");
+        setMessage("Waiting for microphone permission...");
+        shouldSubmitRecordingRef.current = true;
+
+        try {
+          const nextSessionId = await ensureSession();
+          const mimeType = "audio/webm";
+          setActiveSessionId(nextSessionId);
+          activeMimeTypeRef.current = mimeType;
+          e2eRecordingRef.current = { sessionId: nextSessionId, mimeType };
+          chunksRef.current = [new Blob(["synthetic child reading audio"], { type: mimeType })];
+          setRecordingState("recording");
+          setMessage("Recording. Press Stop when you finish this sentence or passage.");
+        } catch (error) {
+          activeMimeTypeRef.current = null;
+          e2eRecordingRef.current = null;
+          shouldSubmitRecordingRef.current = false;
+          setRecordingState("error");
+          setMessage(mapRecordingStartupError(error));
+        }
+
         return;
       }
 
@@ -228,6 +257,7 @@
 
         streamRef.current = stream;
         recorderRef.current = recorder;
+        activeMimeTypeRef.current = mimeType;
 
         recorder.ondataavailable = (event) => {
           if (event.data.size > 0) {
@@ -264,6 +294,8 @@
         clearRecordingLimit();
         stopStream();
         recorderRef.current = null;
+        activeMimeTypeRef.current = null;
+        e2eRecordingRef.current = null;
         shouldSubmitRecordingRef.current = false;
         setRecordingState("error");
         setMessage(mapRecordingStartupError(error));
@@ -274,6 +306,8 @@
       clearRecordingLimit();
       stopStream();
       recorderRef.current = null;
+      activeMimeTypeRef.current = null;
+      e2eRecordingRef.current = null;
       shouldSubmitRecordingRef.current = false;
 
       const audioBlob = new Blob(chunksRef.current, { type: mimeType });
@@ -297,11 +331,14 @@
       setMessage("Listening back to your reading...");
 
       try {
-        const result = await uploadSessionAudio({
-          sessionId: nextSessionId,
-          audio: audioBlob,
-          referenceText: worksheetText
-        });
+        const result = await withTimeout(
+          uploadSessionAudio({
+            sessionId: nextSessionId,
+            audio: audioBlob,
+            referenceText: worksheetText
+          }),
+          AUDIO_PROCESSING_TIMEOUT_MS
+        );
         const timeline = buildKaraokeTimeline({
           worksheetText: worksheetText ?? "",
           audio: result
@@ -358,6 +395,61 @@
         publishPlaybackState(0, -1, false);
         setRecordingState("error");
         setMessage(mapProcessingError(error));
+      }
+    };
+
+    const stopRecording = () => {
+      const recorder = recorderRef.current;
+
+      if (!recorder) {
+        const e2eRecording = e2eRecordingRef.current;
+
+        if (e2eRecording) {
+          e2eRecordingRef.current = null;
+          setRecordingState("processing");
+          setMessage("Listening back to your reading...");
+          void handleRecordingStopped(e2eRecording.sessionId, e2eRecording.mimeType);
+        }
+
+        return;
+      }
+
+      clearRecordingLimit();
+      setRecordingState("processing");
+      setMessage("Listening back to your reading...");
+
+      try {
+        recorder.stop();
+        window.setTimeout(() => {
+          if (
+            shouldSubmitRecordingRef.current &&
+            recorderRef.current === recorder &&
+            chunksRef.current.length > 0 &&
+            activeMimeTypeRef.current
+          ) {
+            void handleRecordingStopped(activeSessionId, activeMimeTypeRef.current);
+          }
+        }, 500);
+        window.setTimeout(() => {
+          if (shouldSubmitRecordingRef.current && recorderRef.current === recorder) {
+            shouldSubmitRecordingRef.current = false;
+            chunksRef.current = [];
+            recorderRef.current = null;
+            activeMimeTypeRef.current = null;
+            stopStream();
+            setRecordingState("error");
+            setMessage("No reading audio was captured. Please try again.");
+          }
+        }, 2_000);
+      } catch {
+        shouldSubmitRecordingRef.current = false;
+        chunksRef.current = [];
+        recorderRef.current = null;
+        activeMimeTypeRef.current = null;
+        e2eRecordingRef.current = null;
+        stopStream();
+        setRecordingState("error");
+        setMessage("The microphone stopped unexpectedly. Please try again.");
       }
     };
 
@@ -546,7 +638,32 @@
     return "The microphone could not start. Please try again.";
   }
 
+  function isE2eSyntheticMediaEnabled() {
+    return window.localStorage.getItem("__wonderwordE2eMedia") === "1";
+  }
+
+  async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+    let timeoutId: number | null = null;
+
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<never>((_, reject) => {
+          timeoutId = window.setTimeout(() => reject(new Error("audio_processing_timeout")), timeoutMs);
+        })
+      ]);
+    } finally {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    }
+  }
+
   function mapProcessingError(error: unknown) {
+    if (error instanceof Error && error.message === "audio_processing_timeout") {
+      return "Reading feedback took too long. Please try recording again.";
+    }
+
     if (error instanceof ApiError) {
       switch (error.code) {
         case "invalid_audio_type":
