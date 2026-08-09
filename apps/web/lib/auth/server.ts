@@ -47,3 +47,45 @@ export async function requireRole(role: UserRole): Promise<AuthContext> {
 
   return auth;
 }
+
+export type HeaderAuthState = { loggedIn: false } | { loggedIn: true; name: string };
+
+// For public pages (Terms, Privacy, Help) that render a real name in the
+// header when someone happens to be signed in, but must never redirect —
+// unlike requireRole, an anonymous visitor is a valid state here.
+export async function getHeaderAuthState(): Promise<HeaderAuthState> {
+  if (!hasSupabaseEnv()) {
+    return { loggedIn: false };
+  }
+
+  const supabase = createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { loggedIn: false };
+  }
+
+  const { data: appUser } = await supabase
+    .from("users")
+    .select("id, role, name")
+    .eq("auth_id", user.id)
+    .single();
+
+  if (!appUser) {
+    return { loggedIn: false };
+  }
+
+  if (appUser.role === "CHILD") {
+    const { data: profile } = await supabase
+      .from("child_profiles")
+      .select("name")
+      .eq("child_id", appUser.id)
+      .single();
+
+    return { loggedIn: true, name: profile?.name ?? "Reader" };
+  }
+
+  return { loggedIn: true, name: appUser.name ?? user.email ?? "Parent" };
+}

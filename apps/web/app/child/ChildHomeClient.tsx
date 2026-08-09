@@ -40,7 +40,7 @@ const DAILY_REFRESH_CARDS = [
     description: "See your words come to life!",
     accent: "bg-[#dbeeff]",
     textAccent: "text-[#1d6fa5]",
-    href: null as string | null
+    href: null
   },
   {
     title: "Word Explorer",

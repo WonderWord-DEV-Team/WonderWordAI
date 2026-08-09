@@ -1,4 +1,6 @@
-import { ShieldCheck, CheckCircle2, Circle, Mail } from "lucide-react";
+import Link from "next/link";
+import { ShieldCheck, CheckCircle2, Mail } from "lucide-react";
+import { getHeaderAuthState } from "@/lib/auth/server";
 
 const NAV_ITEMS = [
   { id: "acceptance", label: "Acceptance" },
@@ -10,7 +12,11 @@ const NAV_ITEMS = [
   { id: "contact", label: "Contact" },
 ];
 
-export default function TermsOfServicePage() {
+export const dynamic = "force-dynamic";
+
+export default async function TermsOfServicePage() {
+  const headerAuth = await getHeaderAuthState();
+
   return (
     <div className="min-h-screen bg-[#FDFAF5] text-[#2b2b2b]">
       {/* ---------------------------------------------------------------- */}
@@ -36,16 +42,21 @@ export default function TermsOfServicePage() {
             </a>
           </nav>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-600">
-              <span>⭐</span>
-              1,240
-            </div>
+          {headerAuth.loggedIn ? (
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-pink-300" />
-              <span className="text-sm font-medium">Emma</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-orange-300 to-pink-300 text-xs font-black text-white">
+                {headerAuth.name.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-sm font-medium">{headerAuth.name}</span>
             </div>
-          </div>
+          ) : (
+            <Link
+              href="/auth/login"
+              className="rounded-full border border-[#ecdfc9] px-6 py-2.5 text-sm font-bold text-[#2b2b2b] transition hover:bg-[#faf7f2]"
+            >
+              Login
+            </Link>
+          )}
         </div>
       </header>
 
@@ -272,7 +283,7 @@ export default function TermsOfServicePage() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <div>
             <img src="/logo.svg" alt="WonderWord AI" className="h-6 w-auto opacity-80" />
-          <p className="ml-1">© 2024 WonderWord AI.</p>
+          <p className="ml-1">© 2026 WonderWord AI.</p>
           </div>
           <div className="flex gap-5">
             <a href="#" className="hover:text-[#2b2b2b]">
