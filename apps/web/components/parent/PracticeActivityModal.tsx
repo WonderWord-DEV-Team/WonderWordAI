@@ -173,7 +173,7 @@ export function PracticeActivityModal({
         <div className="flex justify-center gap-3 px-6 pb-6 pt-2">
           <button
             type="button"
-            onClick={() => downloadActivityAsText(activity)}
+            onClick={onPrint} 
             className="inline-flex items-center gap-2 rounded-full bg-coral px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-coral/90"
           >
             <Download className="h-4 w-4" />
@@ -200,26 +200,3 @@ function lowercaseFirst(value: string) {
 // ticket: integrate playful practice recommendations into parent dashboard
 // lightweight client-only save: no backend persistence exists for "saved"
 // activities yet, so this downloads a plain-text copy the parent can keep
-function downloadActivityAsText(activity: PracticeRecommendation) {
-  const lines = [
-    activity.title,
-    `${activity.durationMinutes} minutes`,
-    "",
-    "What you'll need:",
-    ...activity.materials.map((material) => `- ${material.label}`),
-    "",
-    "What this teaches:",
-    activity.pedagogy,
-    "",
-    "Step-by-step:",
-    ...activity.steps.map((step, index) => `${index + 1}. ${step.title} - ${step.description}`)
-  ];
-
-  const blob = new Blob([lines.join("\n")], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${activity.title.replace(/\s+/g, "-").toLowerCase()}.txt`;
-  link.click();
-  URL.revokeObjectURL(url);
-}

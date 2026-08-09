@@ -4,17 +4,48 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
-type BillingCycle = "monthly" | "yearly";
+type Benefit = {
+  emoji: string;
+  title: string;
+  desc: string;
+  span?: boolean;
+  comingSoon?: boolean;
+};
 
-const benefits = [
-  { tag: "Interactive Scanning", title: "Scan any worksheet", desc: null, span: true },
-  { tag: "🎤", title: "Karaoke Mode", desc: "Real-time highlighting as your child reads out loud.", span: false },
-  { tag: "⭐", title: "Rewards & Badges", desc: null, span: false },
+const benefits: Benefit[] = [
   {
-    tag: null,
-    title: "Parent Dashboard",
-    desc: 'Weekly progress reports without the "How was school?" struggle. See new words mastered and speed improvements at a glance.',
+    emoji: "📸",
+    title: "Scan & Read",
+    desc: "Snap a photo of any worksheet and WonderWord turns it into an interactive reading session — with real-time highlighting as your child reads aloud.",
     span: true,
+  },
+  {
+    emoji: "🔍",
+    title: "Word Explorer",
+    desc: "Type any word and get a simple, kid-friendly definition with a picture to match.",
+  },
+  {
+    emoji: "🎨",
+    title: "Word Vision",
+    desc: "Watch any word come to life as a fun, colorful illustration made just for that word.",
+  },
+  {
+    emoji: "📊",
+    title: "Parent Dashboard",
+    desc: "Biweekly progress reports without the \"How was school?\" struggle — see reading speed, accuracy, and focus areas at a glance, with printable practice activities.",
+    span: true,
+  },
+  {
+    emoji: "🎙️",
+    title: "Read Aloud",
+    desc: "Practice reading out loud anytime, even without a worksheet on hand.",
+    comingSoon: true,
+  },
+  {
+    emoji: "🎵",
+    title: "Word Beats",
+    desc: "Turn any word into a fun, catchy song.",
+    comingSoon: true,
   },
 ];
 
@@ -37,50 +68,18 @@ const steps = [
 const plans = [
   {
     name: "FREE",
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    features: ["1 child", "5 sessions/week", "Basic stats"],
-    cta: "Start Free",
     cardStyle: "bg-white border border-gray-200",
     textStyle: "text-gray-900",
-    ctaStyle: "border border-[#E8604F] text-[#E8604F] hover:bg-[#E8604F]/5",
-    checkColor: "text-[#0F9C8E]",
   },
   {
     name: "PLAN 1",
-    monthlyPrice: 9.99,
-    yearlyPrice: 8.29,
-    badge: "MOST POPULAR",
-    features: [
-      "Unlimited scans",
-      "Claude Sonnet correction stories",
-      "Biweekly reports",
-      "Activity recommendations",
-      "SMS notifications",
-      "1-year data retention",
-    ],
-    cta: "Start Free Trial",
     cardStyle: "bg-[#E8604F]",
     textStyle: "text-white",
-    ctaStyle: "bg-white text-[#E8604F] hover:bg-gray-100",
-    checkColor: "text-white",
   },
   {
     name: "PLAN 2",
-    monthlyPrice: 17.99,
-    yearlyPrice: 14.93,
-    features: [
-      "Plan 1 features",
-      "Unlimited children",
-      "Multi-child dashboard",
-      "Side-by-side WCPM, accuracy, engagement",
-      "Separate reports per child",
-    ],
-    cta: "Get Started",
     cardStyle: "bg-[#F5A623]",
     textStyle: "text-[#1A1A2E]",
-    ctaStyle: "bg-[#E8604F] text-white hover:bg-[#d9543f]",
-    checkColor: "text-[#1A1A2E]",
   },
 ];
 
@@ -105,12 +104,32 @@ const reviews = [
   },
 ];
 
-const questions = [
-  "Is WonderWord safe for my child?",
-  "What grade levels does it support?",
-  "How does the AI reading coach work?",
-  "Can I cancel my subscription anytime?",
-  "Do I need any special equipment?",
+const faqs = [
+  {
+    question: "Is WonderWord safe for my child?",
+    answer:
+      "Yes. Every child profile is created and managed by a parent — children never sign up on their own. We don't sell data, and reading sessions are designed with child privacy in mind from the ground up.",
+  },
+  {
+    question: "What grade levels does it support?",
+    answer:
+      "WonderWord is built for early readers, from Kindergarten through 5th grade (K-5).",
+  },
+  {
+    question: "How does the AI reading coach work?",
+    answer:
+      "Your child scans a worksheet, then reads it aloud. WonderWord listens in real time, highlights each word as it's read, and gently flags words that need more practice — then turns that into a biweekly report and personalized practice ideas for you.",
+  },
+  {
+    question: "Can I cancel my subscription anytime?",
+    answer:
+      "Yes — you'll be able to manage or cancel your subscription anytime from your Parent Dashboard, with no long-term contract required.",
+  },
+  {
+    question: "Do I need any special equipment?",
+    answer:
+      "No special equipment needed — just a device with a camera (to scan worksheets) and a microphone (for reading aloud). Everything runs right in your browser.",
+  },
 ];
 
 const storyWorlds = [
@@ -123,44 +142,43 @@ const storyWorlds = [
 ];
 
 export default function Home() {
-  const [cycle, setCycle] = useState<BillingCycle>("monthly");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   return (
     <main className="bg-[#FFF9F2]">
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 sm:px-12 py-6">
-        <Image
-          src="/landing-assets/logo.svg"
-          alt="WonderWord AI"
-          width={170}
-          height={38}
-          priority
-        />
-        <nav className="hidden sm:flex items-center gap-10 text-sm font-semibold text-gray-600">
-          <a
-            href="#"
-            className="text-[#E8604F] border-b-2 border-[#E8604F] pb-1"
+      {/* ---------------------------------------------------------------- */}
+      {/* Header — standard app pattern, landing-specific nav              */}
+      {/* ---------------------------------------------------------------- */}
+      <header className="border-b border-[#ecdfc9] bg-white">
+        <div className="mx-auto flex max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] items-center justify-between px-6 py-4">
+          <Link href="/">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="WonderWord AI" className="h-8 w-auto cursor-pointer" />
+          </Link>
+
+          <nav className="absolute left-1/2 hidden -translate-x-1/2 gap-8 text-sm font-medium text-[#4a4a4a] md:flex">
+            <a href="/" className="border-b-2 border-[#a3352b] pb-1 font-bold text-[#2b2b2b]">
+              Home
+            </a>
+            <a href="#how-it-works" className="hover:text-[#2b2b2b]">
+              How it Works
+            </a>
+            <a href="#pricing" className="hover:text-[#2b2b2b]">
+              Pricing
+            </a>
+          </nav>
+
+          <Link
+            href="/auth/login"
+            className="rounded-full border border-[#ecdfc9] px-6 py-2.5 text-sm font-bold text-[#2b2b2b] transition hover:bg-[#faf7f2]"
           >
-            Home
-          </a>
-          <a href="#how-it-works" className="hover:text-[#E8604F]">
-            How it Works
-          </a>
-          <a href="#pricing" className="hover:text-[#E8604F]">
-            Pricing
-          </a>
-        </nav>
-        <Link
-          href="/auth/login"
-          className="rounded-full border border-gray-300 px-6 py-2.5 text-sm font-bold text-gray-800 hover:bg-white"
-        >
-          Login
-        </Link>
+            Login
+          </Link>
+        </div>
       </header>
 
       {/* Hero */}
-      <section className="px-6 sm:px-12 pt-4 pb-20">
+      <section className="px-6 sm:px-12 pt-12 pb-20">
         <span className="inline-block bg-[#F9D65C] text-[11px] font-black uppercase tracking-wide px-3 py-1.5 rounded-full text-gray-800">
           Notice!
         </span>
@@ -213,7 +231,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Benefits */}
+      {/* Benefits — reflects real, shipped features */}
       <section className="px-6 sm:px-12 py-20">
         <h2 className="text-center text-[32px] font-black text-[#1A1A2E]">
           Magic in Every Page
@@ -223,30 +241,28 @@ export default function Home() {
           {benefits.map((b) => (
             <div
               key={b.title}
-              className={`rounded-3xl p-7 min-h-[160px] ${
-                b.title === "Karaoke Mode"
+              className={`relative rounded-3xl p-7 min-h-[160px] ${
+                b.comingSoon
+                  ? "bg-[#F2F2F2] opacity-80"
+                  : b.title === "Word Vision"
                   ? "bg-[#CFF2E8]"
-                  : b.title === "Rewards & Badges"
+                  : b.title === "Word Explorer"
                   ? "bg-[#FBF0C7]"
                   : "bg-[#F2F2F2]"
               } ${b.span ? "sm:col-span-2" : ""}`}
             >
-              {b.tag && b.title === "Scan any worksheet" && (
-                <span className="inline-block bg-[#FBD6D0] text-[#C4483A] text-[11px] font-black uppercase px-3 py-1 rounded-full">
-                  {b.tag}
+              {b.comingSoon ? (
+                <span className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-slate-900/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white">
+                  Coming soon
                 </span>
-              )}
-              {b.tag && b.title !== "Scan any worksheet" && (
-                <p className="text-2xl">{b.tag}</p>
-              )}
+              ) : null}
+              <p className="text-2xl">{b.emoji}</p>
               <h3 className="mt-4 text-xl font-black text-[#1A1A2E]">
                 {b.title}
               </h3>
-              {b.desc && (
-                <p className="mt-2 text-sm leading-5 text-gray-600 max-w-sm">
-                  {b.desc}
-                </p>
-              )}
+              <p className="mt-2 text-sm leading-5 text-gray-600 max-w-sm">
+                {b.desc}
+              </p>
               {b.title === "Parent Dashboard" && (
                 <div className="mt-4 bg-white rounded-xl p-4 shadow-sm w-full sm:w-44">
                   <div className="flex items-center justify-between text-xs">
@@ -317,86 +333,37 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Pricing — working Monthly/Annual toggle */}
+      {/* Pricing — not finalized yet */}
       <section id="pricing" className="px-6 sm:px-12 py-20">
         <h2 className="text-center text-[32px] font-black text-[#1A1A2E]">
           Simple, Honest Pricing
         </h2>
         <p className="mt-2 text-center text-[15px] text-gray-500">
-          Start free. Upgrade when you&apos;re ready.
+          We&apos;re still finalizing plan details — pricing is coming soon.
         </p>
 
-        <div className="mt-6 flex justify-center">
-          <div className="inline-flex items-center gap-1 bg-white border border-gray-200 rounded-full p-1">
-            <button
-              type="button"
-              onClick={() => setCycle("monthly")}
-              aria-pressed={cycle === "monthly"}
-              className={`min-h-[48px] px-4 py-1.5 rounded-full text-sm font-bold transition ${
-                cycle === "monthly"
-                  ? "bg-[#1A1A2E] text-white shadow-sm"
-                  : "text-gray-500 hover:text-gray-800"
-              }`}
-            >
-              Monthly
-            </button>
-            <button
-              type="button"
-              onClick={() => setCycle("yearly")}
-              aria-pressed={cycle === "yearly"}
-              className={`min-h-[48px] px-4 py-1.5 rounded-full text-sm font-bold transition ${
-                cycle === "yearly"
-                  ? "bg-[#1A1A2E] text-white shadow-sm"
-                  : "text-gray-500 hover:text-gray-800"
-              }`}
-            >
-              Annual
-            </button>
-            <span className="ml-1 mr-1 bg-[#0F9C8E] text-white text-[10px] font-black px-2 py-1 rounded-full">
-              SAVE 17%
-            </span>
-          </div>
-        </div>
-
         <div className="mt-10 grid sm:grid-cols-3 gap-6 max-w-5xl mx-auto items-start">
-          {plans.map((plan) => {
-            const price =
-              cycle === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
-            return (
-              <div
-                key={plan.name}
-                className={`relative rounded-3xl p-7 ${plan.cardStyle} ${plan.textStyle}`}
-              >
-                {plan.badge && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#1A1A2E] text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-full whitespace-nowrap">
-                    {plan.badge}
-                  </span>
-                )}
-                <p className="font-black text-base">{plan.name}</p>
-                <p className="mt-2 text-4xl font-black">
-                  ${price.toFixed(2)}
-                  <span className="text-sm font-bold">/mo</span>
-                </p>
-                {cycle === "yearly" && price > 0 && (
-                  <p className="mt-1 text-xs font-bold opacity-80">
-                    Billed annually
-                  </p>
-                )}
-                <ul className="mt-5 space-y-2.5 text-sm">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2">
-                      <span className={plan.checkColor}>✓</span> {f}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  className={`mt-7 w-full rounded-full py-3 font-black text-sm ${plan.ctaStyle}`}
-                >
-                  {plan.cta}
-                </button>
+          {plans.map((plan) => (
+            <div
+              key={plan.name}
+              className={`relative rounded-3xl p-7 ${plan.cardStyle} ${plan.textStyle}`}
+            >
+              <p className="font-black text-base">{plan.name}</p>
+              <p className="mt-2 text-4xl font-black">???</p>
+
+              <div className="mt-5 rounded-2xl border border-dashed border-current/30 px-4 py-6 text-center text-sm font-bold opacity-80">
+                Stay tuned! We haven&apos;t finalized pricing or plan features yet.
               </div>
-            );
-          })}
+
+              <button
+                disabled
+                aria-disabled="true"
+                className="mt-7 w-full cursor-not-allowed rounded-full border border-current/30 py-3 font-black text-sm opacity-60"
+              >
+                Coming Soon
+              </button>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -432,18 +399,27 @@ export default function Home() {
         </h2>
 
         <div className="mt-12 max-w-2xl mx-auto grid gap-3">
-          {questions.map((q, i) => (
-            <button
-              key={q}
-              onClick={() => setOpenFaq(openFaq === i ? null : i)}
-              aria-expanded={openFaq === i}
-              className="w-full flex items-center justify-between rounded-full border border-gray-200 bg-white px-6 py-4 text-left text-sm font-bold text-gray-800 hover:bg-gray-50"
+          {faqs.map((faq, i) => (
+            <div
+              key={faq.question}
+              className="rounded-2xl border border-gray-200 bg-white overflow-hidden"
             >
-              {q}
-              <span className="text-gray-400">
-                {openFaq === i ? "︿" : "﹀"}
-              </span>
-            </button>
+              <button
+                onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                aria-expanded={openFaq === i}
+                className="w-full flex items-center justify-between px-6 py-4 text-left text-sm font-bold text-gray-800 hover:bg-gray-50"
+              >
+                {faq.question}
+                <span className="text-gray-400">
+                  {openFaq === i ? "︿" : "﹀"}
+                </span>
+              </button>
+              {openFaq === i ? (
+                <p className="px-6 pb-4 text-sm leading-6 text-gray-600">
+                  {faq.answer}
+                </p>
+              ) : null}
+            </div>
           ))}
         </div>
       </section>
@@ -455,7 +431,7 @@ export default function Home() {
         </h2>
 
         <Link
-          href="#pricing"
+          href="/auth/login"
           className="mt-7 inline-block rounded-full bg-white text-[#9B2335] font-black px-8 py-3.5 hover:bg-gray-100"
         >
           Start Free Today
@@ -465,31 +441,23 @@ export default function Home() {
         </p>
       </section>
 
-      {/* Footer */}
-      <footer className="px-6 sm:px-12 py-10 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div>
-          <Image
-            src="/landing-assets/logo.svg"
-            alt="WonderWord AI"
-            width={140}
-            height={30}
-          />
-          <p className="text-xs text-gray-400 mt-2">© 2024 WonderWord AI.</p>
+      {/* ---------------------------------------------------------------- */}
+      {/* Footer — standard app pattern                                    */}
+      {/* ---------------------------------------------------------------- */}
+      <footer className="border-t border-[#f0e6d8] bg-white py-8">
+        <div className="mx-auto flex max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] flex-col items-center justify-between gap-4 px-6 text-sm text-[#8a8a8a] md:flex-row">
+          <div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="WonderWord AI" className="h-6 w-auto opacity-80" />
+            <p className="ml-1 mt-1">© 2026 WonderWord AI.</p>
+          </div>
+          <div className="flex gap-5">
+            <Link href="/privacy" className="hover:text-[#2b2b2b]">Privacy</Link>
+            <Link href="/terms" className="hover:text-[#2b2b2b]">Terms</Link>
+            <a href="#" className="hover:text-[#2b2b2b]">Support</a>
+            <a href="#" className="hover:text-[#2b2b2b]">About Us</a>
+          </div>
         </div>
-        <nav className="flex gap-6 text-sm font-bold text-gray-500">
-          <a href="#" className="hover:text-[#E8604F]">
-            Privacy
-          </a>
-          <a href="#" className="hover:text-[#E8604F]">
-            Terms
-          </a>
-          <a href="#" className="hover:text-[#E8604F]">
-            Support
-          </a>
-          <a href="#" className="hover:text-[#E8604F]">
-            About Us
-          </a>
-        </nav>
       </footer>
     </main>
   );
