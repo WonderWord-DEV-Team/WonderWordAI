@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   Smile,
   ShieldCheck,
@@ -20,6 +21,8 @@ import {
   SiVercel,
 } from "@icons-pack/react-simple-icons";
 
+import { getHeaderAuthState } from "@/lib/auth/server";
+
 const partners = [
   { name: "Supabase", Icon: SiSupabase, color: "#3ECF8E" },
   { name: "Sentry", Icon: SiSentry, color: "#362D59" },
@@ -27,7 +30,11 @@ const partners = [
   { name: "Vercel", Icon: SiVercel, color: "#000000" },
 ];
 
-export default function PrivacyPolicyPage() {
+export const dynamic = "force-dynamic";
+
+export default async function PrivacyPolicyPage() {
+  const headerAuth = await getHeaderAuthState();
+
   return (
     <div className="min-h-screen bg-[#FDFAF5] text-[#2b2b2b]">
       {/* ---------------------------------------------------------------- */}
@@ -53,16 +60,21 @@ export default function PrivacyPolicyPage() {
             </a>
           </nav>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-600">
-              <span>⭐</span>
-              1,240
-            </div>
+          {headerAuth.loggedIn ? (
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-pink-300" />
-              <span className="text-sm font-medium">Emma</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-orange-300 to-pink-300 text-xs font-black text-white">
+                {headerAuth.name.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-sm font-medium">{headerAuth.name}</span>
             </div>
-          </div>
+          ) : (
+            <Link
+              href="/auth/login"
+              className="rounded-full border border-[#ecdfc9] px-6 py-2.5 text-sm font-bold text-[#2b2b2b] transition hover:bg-[#faf7f2]"
+            >
+              Login
+            </Link>
+          )}
         </div>
       </header>
 

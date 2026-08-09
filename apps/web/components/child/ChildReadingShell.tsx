@@ -10,19 +10,17 @@ import { ReadingRecorder } from "@/components/child/ReadingRecorder";
 import { WorksheetCapture } from "@/components/worksheet/WorksheetCapture";
 import { useCreateSession, useOpenSessions, useSession } from "@/hooks/useSessions";
 import { ApiError } from "@/lib/api/client";
-import type { AuthContext } from "@/lib/auth/types";
 import { normalizeKaraokeWord, type KaraokeTimeline } from "@/lib/karaoke/timeline";
 import type { SessionAudioData, SessionAudioMiscue } from "@/lib/audio/schema";
 
 type ChildReadingShellProps = {
-  auth: AuthContext;
+  childName: string;
   routeSessionId: string;
 };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export function ChildReadingShell({ auth, routeSessionId }: ChildReadingShellProps) {
-  const router = useRouter();
+export function ChildReadingShell({ childName, routeSessionId }: ChildReadingShellProps) {
   const {
     sessionId,
     setSessionId,
@@ -119,15 +117,9 @@ export function ChildReadingShell({ auth, routeSessionId }: ChildReadingShellPro
             <a href="#" className="hover:text-[#2b2b2b]">Diagnostics</a>
           </nav>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-600">
-              <span>⭐</span>
-              1,240
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-pink-300" />
-              <span className="text-sm font-medium">{auth.email}</span>
-            </div>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-pink-300" />
+            <span className="text-sm font-medium">{childName}</span>
           </div>
         </div>
       </header>
