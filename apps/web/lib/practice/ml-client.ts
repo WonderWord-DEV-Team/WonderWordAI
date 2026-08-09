@@ -22,9 +22,13 @@ export class PracticeUpstreamError extends Error {
 }
 
 export async function getActivityRecommendation({
-  phonicsCategory
+  phonicsCategory,
+  recentMiscueWords,
+  childName
 }: {
   phonicsCategory: string;
+  recentMiscueWords: string[];
+  childName: string | null;
 }): Promise<MlActivityRecommendationResponse> {
   const baseUrl = process.env.ML_SERVICE_URL || DEFAULT_ML_SERVICE_URL;
   const serviceKey = process.env.ML_SERVICE_KEY;
@@ -48,7 +52,9 @@ export async function getActivityRecommendation({
         "X-Internal-Key": serviceKey
       },
       body: JSON.stringify({
-        phonics_category: phonicsCategory
+        phonics_category: phonicsCategory,
+        recent_miscue_words: recentMiscueWords,
+        child_name: childName
       })
     });
   } catch (error) {

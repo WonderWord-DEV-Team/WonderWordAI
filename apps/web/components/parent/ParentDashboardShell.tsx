@@ -361,9 +361,9 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
   );
   // react query hooks must be called unconditionally, so these are three fixed
   // slots (disabled automatically by usePracticeRecommendation when null)
-  const practiceQuery0 = usePracticeRecommendation(topFocusCategories[0] ?? null);
-  const practiceQuery1 = usePracticeRecommendation(topFocusCategories[1] ?? null);
-  const practiceQuery2 = usePracticeRecommendation(topFocusCategories[2] ?? null);
+  const practiceQuery0 = usePracticeRecommendation(activeChildId, topFocusCategories[0] ?? null);
+  const practiceQuery1 = usePracticeRecommendation(activeChildId, topFocusCategories[1] ?? null);
+  const practiceQuery2 = usePracticeRecommendation(activeChildId, topFocusCategories[2] ?? null);
   const practiceQueries = [practiceQuery0, practiceQuery1, practiceQuery2].slice(
     0,
     topFocusCategories.length
@@ -479,8 +479,8 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
                 type="button"
                 onClick={() => setPeriod(option.value)}
                 className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${option.value === period
-                    ? "bg-rose-400 text-white shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
+                  ? "bg-rose-400 text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
                   }`}
               >
                 {option.label}
@@ -523,8 +523,8 @@ export function ParentDashboardShell({ auth }: ParentDashboardShellProps) {
                     type="button"
                     onClick={() => setActiveChildId(child.id)}
                     className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${child.id === activeChild.id
-                        ? "bg-rose-400 text-white shadow-sm"
-                        : "text-slate-500 hover:text-slate-700"
+                      ? "bg-rose-400 text-white shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
                       }`}
                   >
                     {child.name}
