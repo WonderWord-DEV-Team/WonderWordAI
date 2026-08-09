@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { LogOut, Volume2, Mic } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
 import { useChildSession } from "@/components/child/ChildSessionContext";
 import { KaraokeText } from "@/components/child/KaraokeText";
 import { ReadingRecorder } from "@/components/child/ReadingRecorder";
 import { WorksheetCapture } from "@/components/worksheet/WorksheetCapture";
-import { useCreateSession, useOpenSessions, useSession } from "@/hooks/useSessions";
+import { useCloseSession, useCreateSession, useOpenSessions, useSession } from "@/hooks/useSessions";
 import { ApiError } from "@/lib/api/client";
 import type { AuthContext } from "@/lib/auth/types";
 import { normalizeKaraokeWord, type KaraokeTimeline } from "@/lib/karaoke/timeline";
@@ -20,6 +21,7 @@ type ChildReadingShellProps = {
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function ChildReadingShell({ auth, routeSessionId }: ChildReadingShellProps) {
+  const router = useRouter();
   const {
     sessionId,
     setSessionId,
@@ -33,8 +35,10 @@ export function ChildReadingShell({ auth, routeSessionId }: ChildReadingShellPro
   } = useChildSession();
   const { data: openSessions } = useOpenSessions();
   const { mutateAsync: createSession } = useCreateSession();
+  const { mutateAsync: closeSession, isPending: isClosingSession } = useCloseSession();
   const parsedRouteSessionId = uuidPattern.test(routeSessionId) ? routeSessionId : null;
   const sessionQuery = useSession(parsedRouteSessionId);
+  const correctionActionRef = useRef<HTMLButtonElement | null>(null);
 
   const [karaokeTimeline, setKaraokeTimeline] = useState<KaraokeTimeline | null>(null);
   const [playbackState, setPlaybackState] = useState({
@@ -45,6 +49,7 @@ export function ChildReadingShell({ auth, routeSessionId }: ChildReadingShellPro
   const [sessionMiscues, setSessionMiscues] = useState<SessionAudioMiscue[]>([]);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [showRescan, setShowRescan] = useState(false);
+  const [sessionEndError, setSessionEndError] = useState<string | null>(null);
 
   const miscueWords = useMemo(
     () => new Set(sessionMiscues.map((m) => normalizeKaraokeWord(m.word))),
@@ -91,13 +96,47 @@ export function ChildReadingShell({ auth, routeSessionId }: ChildReadingShellPro
     }
   };
 
+  useEffect(() => {
+    if (!showCorrectionModal) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowCorrectionModal(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.setTimeout(() => correctionActionRef.current?.focus(), 0);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showCorrectionModal]);
+
+  const handleEndSession = async () => {
+    setSessionEndError(null);
+
+    if (!parsedRouteSessionId) {
+      router.push("/child");
+      return;
+    }
+
+    try {
+      await closeSession(parsedRouteSessionId);
+      clearOcrResult();
+      router.push("/child");
+    } catch {
+      setSessionEndError("We could not close this reading session. Please try again.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#FDFAF5] text-[#2b2b2b] flex flex-col justify-between font-body">
       {/* ---------------------------------------------------------------- */}
       {/* Header                                                          */}
       {/* ---------------------------------------------------------------- */}
       <header className="border-b border-[#ecdfc9] bg-white">
-        <div className="mx-auto flex max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt="WonderWord AI" className="h-8 w-auto" />
 
@@ -108,14 +147,14 @@ export function ChildReadingShell({ auth, routeSessionId }: ChildReadingShellPro
             <a href="#" className="hover:text-[#2b2b2b]">Diagnostics</a>
           </nav>
 
-          <div className="flex items-center gap-4">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:gap-4">
             <div className="flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-600">
               <span>⭐</span>
               1,240
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-pink-300" />
-              <span className="text-sm font-medium">{auth.email}</span>
+              <span className="hidden max-w-48 truncate text-sm font-medium sm:inline">{auth.email}</span>
             </div>
           </div>
         </div>
@@ -126,12 +165,19 @@ export function ChildReadingShell({ auth, routeSessionId }: ChildReadingShellPro
       {/* ---------------------------------------------------------------- */}
       <main className="mx-auto w-full max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] px-6 py-16 flex-1 flex flex-col justify-center relative">
         <div className="w-full animate-fadeIn">
-            <a
-            href="/child"
-            className="flex items-center gap-2 text-[#a3352b] hover:text-[#c03d32] text-lg font-bold font-body mb-6 transition"
+            <button
+            type="button"
+            onClick={handleEndSession}
+            disabled={isClosingSession}
+            className="mb-3 flex min-h-12 items-center gap-2 text-left text-lg font-bold font-body text-[#a3352b] transition hover:text-[#c03d32] disabled:cursor-wait disabled:opacity-70"
           >
             <LogOut className="h-5 w-5 transform rotate-180" /> End Session
-          </a>
+          </button>
+          {sessionEndError ? (
+            <p role="alert" className="mb-4 rounded-[12px] border border-[#a3352b]/20 bg-[#fff2f2] px-4 py-3 text-sm font-bold text-[#a3352b]">
+              {sessionEndError}
+            </p>
+          ) : null}
 
           <div className="mb-8">
             <h1 className="text-4xl font-extrabold text-[#2b2b2b] tracking-tight sm:text-5xl font-body">
@@ -252,9 +298,14 @@ export function ChildReadingShell({ auth, routeSessionId }: ChildReadingShellPro
           {showCorrectionModal && currentMiscue ? (
             <>
               <div className="fixed inset-0 bg-black/40 z-40" />
-              <div className="fixed left-1/2 top-1/2 z-[48] w-[calc(100%-2rem)] max-w-[440px] -translate-x-1/2 -translate-y-1/2 rounded-[36px] border border-[#ecdfc9] bg-[#f4f7f6] shadow-2xl">
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="correction-title"
+                className="fixed left-1/2 top-1/2 z-[48] max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-[440px] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[24px] border border-[#ecdfc9] bg-[#f4f7f6] shadow-2xl sm:rounded-[36px]"
+              >
                 <div className="text-center w-full py-6 px-6 bg-[#fff2f2] border-b border-[#ecdfc9]/60 rounded-t-[34px]">
-                  <h2 className="text-[#a3352b] text-3xl font-extrabold font-body">
+                  <h2 id="correction-title" className="text-[#a3352b] text-2xl font-extrabold font-body sm:text-3xl">
                     Oops, let&apos;s try that again!
                   </h2>
                   <p className="text-xs font-bold text-[#8a8a8a] mt-1.5 font-body">
@@ -263,22 +314,23 @@ export function ChildReadingShell({ auth, routeSessionId }: ChildReadingShellPro
                 </div>
 
                 <div className="w-full px-6 pb-6 pt-4 flex flex-col items-center">
-                  <div className="flex justify-center gap-6 w-full mt-2">
-                    <div className="flex flex-col items-center">
+                  <div className="flex w-full flex-col justify-center gap-4 sm:flex-row sm:gap-6 mt-2">
+                    <div className="flex min-w-0 flex-col items-center">
                       <span className="text-xs font-bold text-[#8a8a8a] mb-2 font-body">You said</span>
-                      <span className="bg-[#fbeceb] text-[#a3352b] border border-[#a3352b] text-2xl font-black px-3 py-1 rounded-full font-body">
+                      <span className="max-w-full break-words rounded-full border border-[#a3352b] bg-[#fbeceb] px-3 py-1 text-center text-xl font-black text-[#a3352b] font-body sm:text-2xl">
                         {currentMiscue.actualPhonemes || "—"}
                       </span>
                     </div>
-                    <div className="flex flex-col items-center">
+                    <div className="flex min-w-0 flex-col items-center">
                       <span className="text-xs font-bold text-[#8a8a8a] mb-2 font-body">The word is</span>
-                      <span className="bg-[#ecfbf0] text-[#10a84e] border border-[#10a84e] text-2xl font-black px-3 py-1 rounded-full font-body">
+                      <span className="max-w-full break-words rounded-full border border-[#10a84e] bg-[#ecfbf0] px-3 py-1 text-center text-xl font-black text-[#10a84e] font-body sm:text-2xl">
                         {currentMiscue.word}
                       </span>
                     </div>
                   </div>
 
                   <button
+                    ref={correctionActionRef}
                     type="button"
                     onClick={() => {
                       setSessionMiscues((prev) => prev.slice(1));

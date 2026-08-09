@@ -157,7 +157,7 @@ export function ChildHomeClient({
       {/* Header                                                          */}
       {/* ---------------------------------------------------------------- */}
       <header className="border-b border-[#ecdfc9] bg-white">
-        <div className="mx-auto flex max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt="WonderWord AI" className="h-8 w-auto" />
 
@@ -176,30 +176,30 @@ export function ChildHomeClient({
             </a>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
             {siblings.length > 0 ? (
               <ProfileSwitcherDropdown siblings={siblings} onSwitch={handleSwitchSibling} />
             ) : null}
 
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-orange-300 to-pink-300 text-xs font-black text-white">
                 {childName.charAt(0).toUpperCase()}
               </div>
-              <span className="text-sm font-medium">{childName}</span>
+              <span className="hidden max-w-40 truncate text-sm font-medium sm:inline">{childName}</span>
             </div>
 
             <button
               type="button"
               onClick={handleBackToParent}
-              className="rounded-full border border-[#ecdfc9] px-3 py-1.5 text-xs font-bold text-[#5a5a5a] transition hover:bg-[#faf7f2]"
+              className="min-h-10 rounded-full border border-[#ecdfc9] px-3 py-1.5 text-xs font-bold text-[#5a5a5a] transition hover:bg-[#faf7f2]"
             >
-              ← Parent
+              Parent
             </button>
 
             <form action={signOut}>
               <button
                 type="submit"
-                className="rounded-full border border-[#ecdfc9] px-3 py-1.5 text-xs font-bold text-[#5a5a5a] transition hover:bg-[#faf7f2]"
+                className="min-h-10 rounded-full border border-[#ecdfc9] px-3 py-1.5 text-xs font-bold text-[#5a5a5a] transition hover:bg-[#faf7f2]"
               >
                 Log Out
               </button>
@@ -390,9 +390,10 @@ function ProfileSwitcherDropdown({
       <button
         type="button"
         onClick={() => setIsOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-full border border-[#ecdfc9] px-3 py-1.5 text-xs font-bold text-[#5a5a5a] transition hover:bg-[#faf7f2]"
+        className="flex min-h-10 items-center gap-1.5 rounded-full border border-[#ecdfc9] px-3 py-1.5 text-xs font-bold text-[#5a5a5a] transition hover:bg-[#faf7f2]"
       >
-        Switch Profile
+        <span className="hidden sm:inline">Switch Profile</span>
+        <span className="sm:hidden">Switch</span>
         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
 

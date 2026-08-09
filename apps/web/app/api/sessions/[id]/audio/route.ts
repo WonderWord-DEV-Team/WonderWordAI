@@ -10,6 +10,12 @@ import {
   type SessionAudioErrorCode
 } from "@/lib/audio/schema";
 import { parseUserRole, type UserRole } from "@/lib/auth/types";
+import {
+  e2eWorksheetText,
+  findE2eSessionForChild,
+  getE2eAuthState,
+  isE2eMode
+} from "@/lib/e2e/fixtures";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { sessionIdSchema } from "@/lib/sessions/api";
@@ -36,6 +42,10 @@ type ReadingSessionRow = {
 };
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
+  if (isE2eMode()) {
+    return handleE2eAudioUpload(request, params.id);
+  }
+
   if (!hasSupabaseEnv()) {
     return errorResponse("internal_error", "Application configuration is incomplete.", 500);
   }
@@ -155,6 +165,65 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
     return errorResponse("internal_error", "Unable to process reading audio.", 500);
   }
+}
+
+async function handleE2eAudioUpload(request: NextRequest, sessionId: string) {
+  const parsedSessionId = sessionIdSchema.safeParse(sessionId);
+
+  if (!parsedSessionId.success) {
+    return errorResponse("session_not_found", "Reading session not found.", 404);
+  }
+
+  const auth = getE2eAuthState(request.cookies);
+  if (auth.status === "unauthenticated") {
+    return errorResponse("unauthorized", "Authentication is required.", 401);
+  }
+
+  if (auth.status !== "authenticated" || auth.appUser.role !== "CHILD") {
+    return errorResponse("forbidden", "Only child accounts can upload reading audio.", 403);
+  }
+
+  const session = findE2eSessionForChild(parsedSessionId.data, auth.appUser.id);
+
+  if (!session) {
+    return errorResponse("session_not_found", "Reading session not found.", 404);
+  }
+
+  if (session.end_time) {
+    return errorResponse("session_closed", "Reading session is already closed.", 409);
+  }
+
+  const { referenceText, response: audioResponse } = await getValidatedAudio(request);
+
+  if (audioResponse) {
+    return audioResponse;
+  }
+
+  const text = referenceText ?? e2eWorksheetText;
+  const words = text.split(/\s+/).filter(Boolean).slice(0, 12);
+
+  return NextResponse.json({
+    data: {
+      sessionId: session.id,
+      transcript: words.join(" "),
+      words: words.map((word, index) => ({
+        word,
+        start: index * 0.45,
+        end: (index + 1) * 0.45
+      })),
+      miscues: [
+        {
+          word: words[2] ?? "glows",
+          expectedPhonemes: "g l ow z",
+          actualPhonemes: "g l aw z",
+          phonicsCategory: "long_vowels",
+          similarityScore: 0.74,
+          confidence: 0.86,
+          isCorrect: false
+        }
+      ]
+    }
+  });
 }
 
 async function getAuthenticatedAppUser(

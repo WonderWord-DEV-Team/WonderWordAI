@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { getRoleHome, parseUserRole } from "@/lib/auth/types";
+import { E2E_AUTH_COOKIE } from "@/lib/e2e/fixtures";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import type { LoginActionState } from "@/app/auth/login/state";
@@ -80,6 +81,7 @@ export async function signOut() {
   }
 
   cookies().delete("parent_session");
+  cookies().delete(E2E_AUTH_COOKIE);
   redirect("/auth/login");
 }
 
