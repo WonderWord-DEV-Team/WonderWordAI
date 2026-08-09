@@ -15,7 +15,7 @@ export function StoryImage({
   alt = "Story illustration",
   className = ""
 }: StoryImageProps) {
-  const baseClassName = `aspect-square w-full overflow-hidden rounded-2xl sm:w-56 w-40 ${className}`;
+  const baseClassName = `aspect-square  overflow-hidden rounded-2xl sm:w-56 w-40 ${className}`;
 
   // skeleton state, shown while the illustration is generating or being fetched
   if (status === "loading") {

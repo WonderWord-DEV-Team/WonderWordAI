@@ -7,7 +7,7 @@ import {
 } from "@/lib/audio/schema";
 
 const DEFAULT_ML_SERVICE_URL = "http://localhost:8000";
-const TRANSCRIPTION_TIMEOUT_MS = 30_000;
+const TRANSCRIPTION_TIMEOUT_MS = 300_000;
 
 export class AudioTranscriptionError extends Error {
   code: SessionAudioErrorCode;

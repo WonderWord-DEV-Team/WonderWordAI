@@ -97,7 +97,7 @@ export default function CorrectionModal({
       : "Next word →";
 
   return (
-    <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-[20px] bg-white shadow-2xl">
+    <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-[20px] bg-white shadow-2xl">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 pb-2">
         <div>
@@ -329,7 +329,7 @@ function PhonicsTab({
     const utterance =
       new SpeechSynthesisUtterance(text);
 
-    utterance.rate = 0.8;
+    utterance.rate = 0.5;
     utterance.lang = "en-US";
 
     window.speechSynthesis.speak(
@@ -491,11 +491,6 @@ function ListenTab({
 }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
 
-  /*
-   * Reads this word's story aloud so the "listening" activity is scoped to
-   * the specific word being practiced, same as Story/Phonics/Practice --
-   * not just a generic replay of the full worksheet.
-   */
   const speak = () => {
     if (
       !storyText ||
@@ -508,13 +503,38 @@ function ListenTab({
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(storyText);
-    utterance.rate = 0.85;
+    utterance.rate = 0.5;
     utterance.lang = "en-US";
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
 
     setIsSpeaking(true);
     window.speechSynthesis.speak(utterance);
+  };
+
+  const togglePlayback = () => {
+    if (typeof window === "undefined" || !window.speechSynthesis) {
+      return;
+    }
+
+    const synth = window.speechSynthesis;
+
+    // Actively playing -> pause in place (don't cancel/restart).
+    if (synth.speaking && !synth.paused) {
+      synth.pause();
+      setIsSpeaking(false);
+      return;
+    }
+
+    // Paused -> resume from where it left off.
+    if (synth.paused) {
+      synth.resume();
+      setIsSpeaking(true);
+      return;
+    }
+
+    // Nothing playing yet (or it already finished) -> start fresh.
+    speak();
   };
 
   return (
@@ -534,7 +554,7 @@ function ListenTab({
 
         <button
           type="button"
-          onClick={speak}
+          onClick={togglePlayback}
           disabled={!storyText}
           aria-label={
             word ? `Listen to the story for ${word}` : "Listen to the story"

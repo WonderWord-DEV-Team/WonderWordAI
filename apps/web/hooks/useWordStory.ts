@@ -6,6 +6,14 @@ import type { GeneratedStory } from "@/lib/stories/generate-client";
 import type { StoryImageStatus } from "@/components/child/StoryImage";
 import type { SessionAudioMiscue } from "@/lib/audio/schema";
 
+function stripVisualMarker(text: string): string {
+  return text
+    .replace(/\[VISUAL\]/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export type WordStoryState = {
   // The story text for the currently active word -- the freshly generated,
   // on-topic story when available, otherwise the fallback (worksheet) text.
@@ -119,7 +127,11 @@ export function useWordStory({
   }, [miscue?.word, miscue?.phonicsCategory, childId]);
 
   const showFallback = generationFailed || !childId;
-  const storyText = generatedStory?.story_text ?? (showFallback ? fallbackText : null);
+  const storyText = generatedStory?.story_text
+  ? stripVisualMarker(generatedStory.story_text)
+  : showFallback
+    ? fallbackText
+    : null;
 
   const status: StoryImageStatus = generatedStory
     ? generatedStory.image_url
