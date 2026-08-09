@@ -2,6 +2,7 @@ import { z } from "zod";
 
 // ticket: integrate playful practice recommendations into parent dashboard
 export const practiceRecommendationRequestSchema = z.object({
+  childId: z.string().min(1, "childId is required"),
   phonicsCategory: z.string().min(1, "phonicsCategory is required")
 });
 
@@ -26,12 +27,11 @@ export const mlActivityRecommendationResponseSchema = z.object({
   duration_minutes: z.number(),
   materials: z.array(practiceMaterialSchema),
   example_words: z.array(z.string()),
-  steps: z.array(practiceStepSchema)
+  steps: z.array(practiceStepSchema),
+  recommendation: z.string().nullable()
 });
 
-export type MlActivityRecommendationResponse = z.infer<
-  typeof mlActivityRecommendationResponseSchema
->;
+export type MlActivityRecommendationResponse = z.infer<typeof mlActivityRecommendationResponseSchema>;  
 
 const practiceRecommendationSchema = z.object({
   title: z.string(),
@@ -41,7 +41,8 @@ const practiceRecommendationSchema = z.object({
   durationMinutes: z.number(),
   materials: z.array(practiceMaterialSchema),
   exampleWords: z.array(z.string()),
-  steps: z.array(practiceStepSchema)
+  steps: z.array(practiceStepSchema),
+  recommendation: z.string().nullable()
 });
 
 // shape returned by our own /api/practice-recommendation route
@@ -49,11 +50,9 @@ export const practiceRecommendationResponseSchema = z.object({
   data: practiceRecommendationSchema
 });
 
-export type PracticeRecommendationResponse = z.infer<
-  typeof practiceRecommendationResponseSchema
->;
+export type PracticeRecommendationResponse = z.infer<typeof practiceRecommendationResponseSchema>;
 export type PracticeRecommendation = z.infer<typeof practiceRecommendationSchema>;
 export type PracticeMaterial = z.infer<typeof practiceMaterialSchema>;
 export type PracticeStep = z.infer<typeof practiceStepSchema>;
 
-export type PracticeErrorCode = "configuration_error" | "invalid_request" | "internal_error";
+export type PracticeErrorCode = "configuration_error" | "invalid_request" | "internal_error" | "forbidden";

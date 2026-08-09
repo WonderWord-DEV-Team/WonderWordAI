@@ -18,10 +18,11 @@ export function PrintableActivityCard({
 }: PrintableActivityCardProps) {
   return (
     <div className={`print-activity-card bg-white p-10 ${className}`}>
-      <div className="flex items-center gap-2 text-lg font-bold text-rose-500">
-        <Rocket className="h-5 w-5" />
-        WonderWord AI — Playful Practice
-      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logo.svg" alt="WonderWord AI" className="h-8 w-auto" />
+      <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-[#a3352b]">
+        Playful Practice
+      </p>
 
       <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
         {childName ? `For ${childName} · ` : ""}
