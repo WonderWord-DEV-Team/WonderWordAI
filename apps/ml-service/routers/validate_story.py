@@ -35,9 +35,15 @@ POSITIVE_WORDS = {
 }
 
 MAX_GRADE_LEVEL = 3.0
-MIN_WORD_OCCURRENCES = 2
-MAX_WORD_OCCURRENCES = 3
 VISUAL_MARKER = "[VISUAL]"
+
+# If a child doesn't have many known words tracked yet, most vocabulary would
+# otherwise fail the guardrail below even for normal beginner-reader text. In
+# that case, also allow standard early-reading sight words (Dolch + Fry, from
+# public.curriculum_words) so validation reflects realistic beginner
+# vocabulary rather than only whatever's explicitly been logged for the child.
+KNOWN_WORDS_AUGMENT_THRESHOLD = 500
+CURRICULUM_LIST_NAMES = ("dolch", "fry")
 
 GuardrailResult = tuple[bool, list[str]]
 
@@ -50,7 +56,16 @@ class ValidateStoryRequest(BaseModel):
 
 
 def _tokenize(text: str) -> list[str]:
-    return re.findall(r"[a-zA-Z']+", text.lower())
+    # Story text embeds inside a JSON string, so the model tends to write
+    # dialogue with a single quote (') instead of a double quote, to avoid
+    # having to escape it -- e.g. 'This is fun!' said the explorer. Since '
+    # is also allowed mid-word for real contractions (don't, it's), a
+    # dialogue-opening/closing quote glues onto the adjacent word (making
+    # "this" show up as "'this", or an isolated closing quote show up as
+    # its own empty-ish token) unless we strip leading/trailing quotes
+    # after extracting each token.
+    raw_tokens = re.findall(r"[a-zA-Z']+", text.lower())
+    return [stripped for token in raw_tokens if (stripped := token.strip("'"))]
 
 
 def _count_syllables(word: str) -> int:
@@ -126,17 +141,14 @@ def check_content_safety(story_text: str) -> GuardrailResult:
 
 
 def check_structure(story_text: str, word: str) -> GuardrailResult:
+    # `word` is unused now that the target-word occurrence-count constraint
+    # has been removed (a story is no longer required to mention the target
+    # word exactly 2-3 times). Kept in the signature since callers already
+    # pass it and a future structural check may want it again.
     errors: list[str] = []
 
     if VISUAL_MARKER not in story_text:
         errors.append(f"structure: missing {VISUAL_MARKER} marker")
-
-    count = len(re.findall(rf"\b{re.escape(word)}\b", story_text, flags=re.IGNORECASE))
-    if not (MIN_WORD_OCCURRENCES <= count <= MAX_WORD_OCCURRENCES):
-        errors.append(
-            f"structure: target word appears {count} time(s), expected "
-            f"{MIN_WORD_OCCURRENCES}-{MAX_WORD_OCCURRENCES}"
-        )
 
     sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", story_text.strip()) if s.strip()]
     ending = sentences[-1].lower() if sentences else ""
@@ -187,6 +199,34 @@ async def validate_story(
             # if we can't fetch known words, vocabulary will fail loudly below
             # rather than silently passing everything
             known_words = []
+
+    if len(known_words) < KNOWN_WORDS_AUGMENT_THRESHOLD:
+        # A child with few tracked known words would otherwise fail
+        # vocabulary on ordinary beginner-reader text. Round out the
+        # allowed vocabulary with standard Dolch/Fry sight words so the
+        # guardrail reflects realistic beginner vocabulary instead.
+        #
+        # supabase.table().execute() is blocking network I/O -- run it off
+        # the event loop thread, same as the known-words fetch above.
+        def _fetch_curriculum_words():
+            supabase = get_supabase_client()
+            return (
+                supabase.table("curriculum_words")
+                .select("word")
+                .in_("list_name", list(CURRICULUM_LIST_NAMES))
+                .execute()
+            )
+
+        try:
+            curriculum_result = await run_in_threadpool(_fetch_curriculum_words)
+            curriculum_words = [
+                str(row["word"]) for row in (curriculum_result.data or []) if row.get("word")
+            ]
+            known_words = list({*known_words, *curriculum_words})
+        except Exception:
+            # if curriculum words can't be fetched, fall back to whatever
+            # known_words we already have rather than failing the request
+            pass
 
     checks: dict[str, GuardrailResult] = {
         "vocabulary": check_vocabulary(request.story_text, request.word, known_words),
