@@ -9,15 +9,13 @@ from routers.detect_miscue import router as detect_miscue_router
 from routers.transcribe import router as transcribe_router
 from routers.phonics_lookup import router as phonics_router
 from routers.activity_recommendation import router as activity_recommendation_router
-from routers.validate_story import router as validate_story_router  # ADDED
+from routers.validate_story import router as validate_story_router 
 from routers.word_definition import router as word_definition_router
 from services.embedding_service import embedding_model
 from config import SENTRY_DSN  # ADDED
-from routers.word_definition import router as word_definition_router
-
 from routers.themed_story import router as themed_story_router
+from routers.narrate import router as narrate_router
 
-# ADDED — initialize Sentry once at import time, guarded by env var
 if SENTRY_DSN:
     import sentry_sdk
     from sentry_sdk.utils import BadDsn

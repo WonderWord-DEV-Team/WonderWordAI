@@ -15,12 +15,15 @@ const STORY_SYSTEM_PROMPT = `You are a creative children's book author and phoni
 Your task is to generate an engaging, educational story for a child learning to read. The story must focus on a target word and its associated phonics category.
 
 Rules for Story Generation:
-1. **Target Word Integration**: The target word must be a central element of the story. Repeat the target word and other words from the same phonics category where appropriate, but ensure the story remains natural and fun.
-2. **Reading Level**: Keep sentences short and simple. Use vocabulary suitable for beginning readers aged 4 to 6 years old (kindergarten to early elementary).
-3. **Structure**: The story should have a clear beginning, middle, and end.
-4. **Theme Alignment**: If a theme is provided, weave the story around that theme (e.g., space adventure, animals, fairy tales).
-5. **Length**: The story should be around 100-200 words, split into 3-5 readable paragraphs.
-6. **No Spoilers**: Do not explain the phonics rule within the story itself. The story should just be a fun reading practice.
+1. **Vocabulary Restriction**: Use ONLY words from the Known Words list provided in the prompt, plus the target word itself. This is a hard constraint, not a suggestion -- do not use any other word, even ordinary, simple, or common ones (e.g. "home," "friend," "looked"), unless it appears in that list or is the target word. If you need a concept the list doesn't cover, rephrase the sentence using words that are on the list rather than reaching for a word that isn't.
+2. **Target Word Integration**: The target word must be a central element of the story. Repeat the target word where appropriate, but ensure the story remains natural and fun -- and still follows Rule 1 for every other word.
+3. **Reading Level**: Keep sentences short and simple. Use vocabulary suitable for beginning readers aged 4 to 6 years old (kindergarten to early elementary).
+4. **Structure**: The story should have a clear beginning, middle, and end.
+5. **Theme Alignment**: If a theme is provided, weave the story around that theme (e.g., space adventure, animals, fairy tales) using only words from the Known Words list.
+6. **Length**: The story should be around 100-200 words, split into 3-5 readable paragraphs.
+7. **No Spoilers**: Do not explain the phonics rule within the story itself. The story should just be a fun reading practice.
+8. **Illustration Marker**: Insert the exact marker [VISUAL] exactly once, on its own, at the single best point in the story for an illustration (for example, between two paragraphs, at the story's most exciting moment). This marker will be replaced with an image and is never shown to the reader as text, so do not describe it or refer to it in the story itself.
+9. **Ending**: End the story on a clearly positive, upbeat note (e.g. an exclamation, or a word like "happy," "smiled," or "yay" -- if one of those is in the Known Words list).
 
 Validation Criteria:
 Evaluate the generated story and calculate a validation score from 0 to 100:
@@ -78,7 +81,7 @@ export async function generateStoryWithClaude({
   const groundingLine = phonicsGrounding
   ? `Phonics focus for this word: ${phonicsGrounding.ruleExplanation}${
       phonicsGrounding.examples.length > 0
-        ? ` Related words for this pattern (only use these if they are also in the known words list): ${phonicsGrounding.examples.join(", ")}.`
+        ? ` Related words for this pattern you may use: ${phonicsGrounding.examples.join(", ")}.`
         : ""
     }`
   : "";
@@ -88,7 +91,9 @@ const promptText = [
   `- Target Word: "${word}"`,
   `- Phonics Category: "${phonicsCategory}"`,
   `- Theme: "${theme || "General Adventure"}"`,
-  knownWords.length > 0 ? `- Familiar/Known Words to include if possible: ${knownWords.join(", ")}` : "",
+  knownWords.length > 0
+    ? `- Known Words list (the ONLY words you may use besides the target word): ${knownWords.join(", ")}`
+    : "",
   groundingLine,
   feedbackLine
 ]
