@@ -40,7 +40,7 @@ const DAILY_REFRESH_CARDS = [
     description: "See your words come to life!",
     accent: "bg-[#dbeeff]",
     textAccent: "text-[#1d6fa5]",
-    href: null
+    href: "/vision" as string | null 
   },
   {
     title: "Word Explorer",
@@ -308,7 +308,7 @@ export function ChildHomeClient({
                 >
                   <h3 className={`font-black ${card.textAccent}`}>{card.title}</h3>
                   <p className="mt-1 text-sm leading-6 text-[#2b2b2b]/80">{card.description}</p>
-                  <span className="mt-3 inline-block text-xs font-black text-[#2b2b2b]/60">⭐ Earn 20</span>
+                  {/* <span className="mt-3 inline-block text-xs font-black text-[#2b2b2b]/60">⭐ Earn 20</span> */}
                 </Link>
               ) : (
                 <div key={card.title} className={`relative rounded-2xl ${card.accent} p-5 opacity-70`}>

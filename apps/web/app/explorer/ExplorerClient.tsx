@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Link from "next/link";
-import { LogOut, Volume2, X } from "lucide-react";
+import { LogOut, Volume2, VolumeX, X } from "lucide-react";
 
 type DefinitionData = {
   definition: string;
@@ -22,6 +22,80 @@ export function ExplorerClient({ childName }: { childName: string }) {
   const [hasSearched, setHasSearched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Estados de controle de áudio
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const stopSpeaking = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
+  };
+
+  const handleHearDefinition = async () => {
+    if (!definition || !submittedWord) return;
+
+    // Concatena a palavra com o significado para a narração
+    const textToSpeak = `${submittedWord}. ${definition.definition}`;
+
+    if (isSpeaking) {
+      stopSpeaking();
+    } else {
+      setIsSpeaking(true);
+      try {
+        const res = await fetch("/api/narration", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: textToSpeak,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to generate OpenAI TTS");
+        }
+
+        const json = await res.json();
+        if (json.data && json.data.audio_base64) {
+          const audioUrl = `data:audio/mp3;base64,${json.data.audio_base64}`;
+          const audio = new Audio(audioUrl);
+          audioRef.current = audio;
+          audio.onended = () => {
+            setIsSpeaking(false);
+          };
+          audio.onerror = () => {
+            setIsSpeaking(false);
+          };
+          await audio.play();
+        } else {
+          throw new Error("No audio returned from narration API");
+        }
+      } catch (err) {
+        console.error("OpenAI TTS failed, falling back to browser SpeechSynthesis:", err);
+        // Fallback para SpeechSynthesis do navegador
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(textToSpeak);
+          utterance.rate = 0.85; // velocidade mais lenta para crianças
+          utterance.lang = "en-US";
+          utterance.onend = () => setIsSpeaking(false);
+          utterance.onerror = () => setIsSpeaking(false);
+          window.speechSynthesis.speak(utterance);
+        } else {
+          setIsSpeaking(false);
+          alert("Could not play story voice.");
+        }
+      }
+    }
+  };
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const query = searchTerm.trim();
@@ -31,6 +105,7 @@ export function ExplorerClient({ childName }: { childName: string }) {
     setSubmittedWord(query);
     setHasSearched(true);
     setDefinition(null);
+    stopSpeaking(); // Interrompe o áudio anterior caso uma nova pesquisa seja feita
 
     const definitionPromise = fetch("/api/word-explorer/define", {
       method: "POST",
@@ -76,6 +151,7 @@ export function ExplorerClient({ childName }: { childName: string }) {
   };
 
   const handleClear = () => {
+    stopSpeaking(); // Interrompe o áudio ao limpar a tela
     setSearchTerm("");
     setSubmittedWord(null);
     setDefinition(null);
@@ -117,7 +193,11 @@ export function ExplorerClient({ childName }: { childName: string }) {
 
       <main className="flex-1 w-full max-w-[1280px] mx-auto px-6 md:px-[200px] py-12 flex flex-col justify-center items-start">
         <div className="w-full flex justify-start mb-6">
-          <Link href="/child" className="flex items-center gap-2 text-sm font-bold text-[#a3352b] hover:text-[#8c2c23] transition-colors">
+          <Link
+            href="/child"
+            onClick={stopSpeaking} // Interrompe o áudio ao voltar para a home
+            className="flex items-center gap-2 text-sm font-bold text-[#a3352b] hover:text-[#8c2c23] transition-colors"
+          >
             <LogOut className="h-4 w-4 transform rotate-180" />
             End Session
           </Link>
@@ -125,7 +205,7 @@ export function ExplorerClient({ childName }: { childName: string }) {
 
         <div className="w-full flex flex-col justify-start items-start gap-8 md:gap-[60px] opacity-100 mb-12">
           <div className="text-start">
-            <h1 className="text-4xl font-serif text-4xl font-bold text-[#a3352b] md:text-5xl">
+            <h1 className="text-4xl font-serif md:text-5xl font-bold text-[#a3352b]">
               Word Explorer
             </h1>
             <p className="mt-2 text-lg text-[#5a5a5a]">
@@ -197,10 +277,24 @@ export function ExplorerClient({ childName }: { childName: string }) {
                   <div className="flex flex-col min-[480px]:flex-row gap-4">
                     <button
                       type="button"
-                      className="flex-1 min-h-[56px] bg-[#4ecdc4] hover:bg-[#3dbdb3] text-white text-xl font-extrabold px-6 py-3 rounded-full flex items-center justify-center gap-2 transition shadow-sm"
+                      onClick={handleHearDefinition}
+                      className={`flex-1 min-h-[56px] text-white text-xl font-extrabold px-6 py-3 rounded-full flex items-center justify-center gap-2 transition shadow-sm ${
+                        isSpeaking
+                          ? "bg-[#2b2b2b] hover:bg-black"
+                          : "bg-[#4ecdc4] hover:bg-[#3dbdb3]"
+                      }`}
                     >
-                      <Volume2 className="h-6 w-6" />
-                      Hear it again
+                      {isSpeaking ? (
+                        <>
+                          <VolumeX className="h-6 w-6" />
+                          Stop Voice
+                        </>
+                      ) : (
+                        <>
+                          <Volume2 className="h-6 w-6" />
+                          Hear it again
+                        </>
+                      )}
                     </button>
                     <button
                       type="button"
