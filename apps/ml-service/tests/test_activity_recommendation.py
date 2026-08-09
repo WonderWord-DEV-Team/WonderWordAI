@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-# Make imports reliable whether pytest is run from the repository root or here.
 ML_SERVICE_DIR = Path(__file__).resolve().parents[1]
 if str(ML_SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(ML_SERVICE_DIR))
@@ -19,35 +18,64 @@ def _client():
     return TestClient(app)
 
 
-def _mock_supabase(rows):
-    supabase = MagicMock()
-    supabase.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = rows
-    return supabase
+def _mock_text_block(text: str):
+    block = MagicMock()
+    block.type = "text"
+    block.text = text
+    return block
 
 
-# ticket: integrate playful practice recommendations into parent dashboard
-def _sample_row():
-    return {
-        "title": "Shadow Puppets SH Game",
-        "description": "Turn off the lights and use a flashlight.",
-        "pedagogy": "Connects kinetic motor controls with vocal phonetic blending.",
-        "phonics_category": "sh-digraph",
-        "duration_minutes": 10,
-        "materials": [
-            {"icon": "lamp", "label": "Lamp or torch"},
-            {"icon": "wall", "label": "A plain white wall"}
-        ],
-        "example_words": ["ship", "shell", "shout", "fish", "wish"],
-        "steps": [
-            {"title": "Set the scene", "description": "Darken the room and shine a lamp at a wall."}
-        ]
-    }
+def _mock_claude_response(payload: dict):
+    response = MagicMock()
+    response.content = [_mock_text_block(str(payload).replace("'", '"'))]
+    return response
 
 
-@patch("routers.activity_recommendation.get_supabase_client")
-def test_activity_recommendation_returns_matching_row(mock_get_client):
-    row = _sample_row()
-    mock_get_client.return_value = _mock_supabase([row])
+ACTIVITY_JSON = """{
+  "title": "Shadow Puppets SH Game",
+  "description": "Turn off the lights and use a flashlight.",
+  "pedagogy": "Connects kinetic motor controls with vocal phonetic blending.",
+  "duration_minutes": 10,
+  "materials": [{"icon": "lamp", "label": "Lamp or torch"}],
+  "example_words": ["ship", "shell", "shout"],
+  "steps": [{"title": "Set the scene", "description": "Darken the room and shine a lamp at a wall."}]
+}"""
+
+RECOMMENDATION_TEXT = "# Why It Helps\n- Builds sound awareness"
+
+
+@patch("routers.activity_recommendation.anthropic_client")
+def test_activity_recommendation_generates_activity_and_recommendation(mock_client, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    activity_response = MagicMock()
+    activity_response.content = [_mock_text_block(ACTIVITY_JSON)]
+
+    recommendation_response = MagicMock()
+    recommendation_response.content = [_mock_text_block(RECOMMENDATION_TEXT)]
+
+    mock_client.messages.create.side_effect = [activity_response, recommendation_response]
+
+    response = _client().post(
+        "/activity-recommendation",
+        json={"phonics_category": "sh-digraph", "recent_miscue_words": ["ship", "wish"], "child_name": "Leo"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "Shadow Puppets SH Game"
+    assert data["phonics_category"] == "sh-digraph"
+    assert data["recommendation"] == RECOMMENDATION_TEXT
+    assert mock_client.messages.create.call_count == 2
+
+
+@patch("routers.activity_recommendation.anthropic_client")
+def test_activity_recommendation_falls_back_when_claude_returns_malformed_json(mock_client, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    bad_response = MagicMock()
+    bad_response.content = [_mock_text_block("not json at all")]
+    mock_client.messages.create.return_value = bad_response
 
     response = _client().post(
         "/activity-recommendation",
@@ -55,42 +83,25 @@ def test_activity_recommendation_returns_matching_row(mock_get_client):
     )
 
     assert response.status_code == 200
-    assert response.json() == row
+    data = response.json()
+    assert data["title"] == FALLBACK_ACTIVITY["title"]
+    assert data["phonics_category"] == "sh-digraph"
 
 
-@patch("routers.activity_recommendation.get_supabase_client")
-def test_activity_recommendation_falls_back_for_unknown_category(mock_get_client):
-    mock_get_client.return_value = _mock_supabase([])
-
-    response = _client().post(
-        "/activity-recommendation",
-        json={"phonics_category": "not-a-real-category"}
-    )
-
-    assert response.status_code == 200
-    assert response.json() == FALLBACK_ACTIVITY
-    # fallback must carry the same detail fields the modal relies on
-    assert "steps" in response.json()
-    assert "materials" in response.json()
-
-
-@patch("routers.activity_recommendation.get_supabase_client")
-def test_activity_recommendation_falls_back_on_lookup_error(mock_get_client):
-    mock_get_client.side_effect = RuntimeError("supabase unavailable")
+def test_activity_recommendation_falls_back_without_api_key(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
     response = _client().post(
         "/activity-recommendation",
         json={"phonics_category": "sh-digraph"}
     )
 
-    # the dashboard must never see an error state for this endpoint
     assert response.status_code == 200
-    assert response.json() == FALLBACK_ACTIVITY
+    data = response.json()
+    assert data["title"] == FALLBACK_ACTIVITY["title"]
+    assert data["recommendation"] is None
 
 
-@patch("routers.activity_recommendation.get_supabase_client")
-def test_activity_recommendation_requires_phonics_category(mock_get_client):
+def test_activity_recommendation_requires_phonics_category():
     response = _client().post("/activity-recommendation", json={})
-
     assert response.status_code == 422
-    mock_get_client.assert_not_called()
