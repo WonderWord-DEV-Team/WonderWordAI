@@ -22,7 +22,7 @@ MISCUE_CONFIDENCE_THRESHOLD = float(
 # alignment against what was actually spoken. Deliberately lenient: a
 # beginning reader's pronunciation is never a perfect phoneme match, and
 # the goal is to catch real substitutions ("dag" for "dog"), not accent.
-WORD_MISCUE_THRESHOLD = float(os.getenv("WORD_MISCUE_THRESHOLD", "0.6"))
+WORD_MISCUE_THRESHOLD = float(os.getenv("WORD_MISCUE_THRESHOLD", "0.5"))
 
 processor = None
 model = None
