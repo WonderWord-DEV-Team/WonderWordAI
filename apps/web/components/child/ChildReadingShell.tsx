@@ -1,24 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { LogOut, Volume2, Mic } from "lucide-react";
 import { useChildSession } from "@/components/child/ChildSessionContext";
+import CorrectionModal from "@/components/child/CorrectionModal";
 import { KaraokeText } from "@/components/child/KaraokeText";
 import { ReadingRecorder } from "@/components/child/ReadingRecorder";
 import { WorksheetCapture } from "@/components/worksheet/WorksheetCapture";
 import { useCreateSession, useOpenSessions, useSession } from "@/hooks/useSessions";
 import { ApiError } from "@/lib/api/client";
+import type { AuthContext } from "@/lib/auth/types";
 import { normalizeKaraokeWord, type KaraokeTimeline } from "@/lib/karaoke/timeline";
-import type { SessionAudioMiscue } from "@/lib/audio/schema";
+import type { SessionAudioData, SessionAudioMiscue } from "@/lib/audio/schema";
 
 type ChildReadingShellProps = {
+  auth: AuthContext;
   childName: string;
   routeSessionId: string;
 };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export function ChildReadingShell({ childName, routeSessionId }: ChildReadingShellProps) {
+export function ChildReadingShell({ auth, childName, routeSessionId }: ChildReadingShellProps) {
+  const router = useRouter();
   const {
     sessionId,
     setSessionId,
@@ -28,6 +33,8 @@ export function ChildReadingShell({ childName, routeSessionId }: ChildReadingShe
     worksheetStatus,
     setWorksheetStatus,
     setOcrResult,
+    latestTranscription,
+    setLatestTranscription,
     clearOcrResult
   } = useChildSession();
   const { data: openSessions } = useOpenSessions();
@@ -44,6 +51,7 @@ export function ChildReadingShell({ childName, routeSessionId }: ChildReadingShe
   const [sessionMiscues, setSessionMiscues] = useState<SessionAudioMiscue[]>([]);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [showRescan, setShowRescan] = useState(false);
+  const [hasResults, setHasResults] = useState(false);
 
   const miscueWords = useMemo(
     () => new Set(sessionMiscues.map((m) => normalizeKaraokeWord(m.word))),
@@ -81,13 +89,44 @@ export function ChildReadingShell({ childName, routeSessionId }: ChildReadingShe
     return session.id;
   };
 
-  const handleTranscriptionComplete = (result: { miscues: SessionAudioMiscue[] }) => {
+  const handleTranscriptionComplete = (result: SessionAudioData) => {
     // Batch, end-of-session correction feedback (per product decision:
     // simpler than live per-word miscue detection).
+    setLatestTranscription(result);
     setSessionMiscues(result.miscues);
+    setHasResults(true);
     if (result.miscues.length > 0) {
       setShowCorrectionModal(true);
     }
+  };
+
+  // Called from the Practice tab (via CorrectionModal) when the child
+  // pronounces a practice word correctly within the attempt cap. Removes
+  // that word from both: sessionMiscues (drives the correction modal /
+  // karaoke highlighting for the rest of THIS session) and
+  // latestTranscription (what the results screen reads for its
+  // correct/accuracy counts) -- otherwise a word mastered here would keep
+  // counting as a miss on the results page even though the child just
+  // demonstrated they can read it.
+  const handleWordMastered = (word: string) => {
+    const normalized = normalizeKaraokeWord(word);
+
+    setSessionMiscues((prev) =>
+      prev.filter((miscue) => normalizeKaraokeWord(miscue.word) !== normalized)
+    );
+
+    if (latestTranscription) {
+      setLatestTranscription({
+        ...latestTranscription,
+        miscues: latestTranscription.miscues.filter(
+          (miscue) => normalizeKaraokeWord(miscue.word) !== normalized
+        )
+      });
+    }
+  };
+
+  const goToResults = () => {
+    router.push(`/child/${sessionId}/results`);
   };
 
   return (
@@ -127,7 +166,7 @@ export function ChildReadingShell({ childName, routeSessionId }: ChildReadingShe
           </a>
 
           <div className="mb-8">
-            <h1 className="text-4xl font-extrabold text-[#2b2b2b] tracking-tight sm:text-5xl font-body">
+            <h1 className="text-4xl font-serif font-bold text-[#a3352b] tracking-tight sm:text-5xl font-body">
               Reading Mode
             </h1>
             <p className="mt-2 text-lg text-[#8a8a8a] font-body">
@@ -199,6 +238,19 @@ export function ChildReadingShell({ childName, routeSessionId }: ChildReadingShe
                 />
               </div>
 
+              {/* Once a reading pass finishes, let the child jump to their results */}
+              {hasResults ? (
+                <div className="flex justify-center mb-4">
+                  <button
+                    type="button"
+                    onClick={goToResults}
+                    className="rounded-full bg-[#0F9C8E] hover:bg-[#0d8478] px-8 py-3 text-base font-black text-white shadow-sm transition"
+                  >
+                    See my results →
+                  </button>
+                </div>
+              ) : null}
+
               {/* Rescan */}
               <div className="flex justify-center">
                 <button
@@ -231,6 +283,7 @@ export function ChildReadingShell({ childName, routeSessionId }: ChildReadingShe
                         setKaraokeTimeline(null);
                         setPlaybackState({ activeIndex: -1, currentTime: 0, playbackCompleted: false });
                         setSessionMiscues([]);
+                        setHasResults(false);
                         setOcrResult(result);
                         setShowRescan(false);
                       }}
@@ -241,51 +294,20 @@ export function ChildReadingShell({ childName, routeSessionId }: ChildReadingShe
             </>
           )}
 
-          {/* Batch correction popup — shown after a completed reading pass with miscues */}
+          {/* Correction modal popup — shown after a completed reading pass with miscues */}
           {showCorrectionModal && currentMiscue ? (
-            <>
-              <div className="fixed inset-0 bg-black/40 z-40" />
-              <div className="fixed left-1/2 top-1/2 z-[48] w-[calc(100%-2rem)] max-w-[440px] -translate-x-1/2 -translate-y-1/2 rounded-[36px] border border-[#ecdfc9] bg-[#f4f7f6] shadow-2xl">
-                <div className="text-center w-full py-6 px-6 bg-[#fff2f2] border-b border-[#ecdfc9]/60 rounded-t-[34px]">
-                  <h2 className="text-[#a3352b] text-3xl font-extrabold font-body">
-                    Oops, let&apos;s try that again!
-                  </h2>
-                  <p className="text-xs font-bold text-[#8a8a8a] mt-1.5 font-body">
-                    You read a different word. No worries!
-                  </p>
-                </div>
-
-                <div className="w-full px-6 pb-6 pt-4 flex flex-col items-center">
-                  <div className="flex justify-center gap-6 w-full mt-2">
-                    <div className="flex flex-col items-center">
-                      <span className="text-xs font-bold text-[#8a8a8a] mb-2 font-body">You said</span>
-                      <span className="bg-[#fbeceb] text-[#a3352b] border border-[#a3352b] text-2xl font-black px-3 py-1 rounded-full font-body">
-                        {currentMiscue.actualPhonemes || "—"}
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-xs font-bold text-[#8a8a8a] mb-2 font-body">The word is</span>
-                      <span className="bg-[#ecfbf0] text-[#10a84e] border border-[#10a84e] text-2xl font-black px-3 py-1 rounded-full font-body">
-                        {currentMiscue.word}
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSessionMiscues((prev) => prev.slice(1));
-                      if (sessionMiscues.length <= 1) {
-                        setShowCorrectionModal(false);
-                      }
-                    }}
-                    className="bg-black hover:bg-zinc-900 active:scale-95 text-white font-extrabold text-2xl font-body py-3 px-10 rounded-[12px] mt-6 shadow-md transition"
-                  >
-                    {sessionMiscues.length > 1 ? "Next →" : "Done"}
-                  </button>
-                </div>
-              </div>
-            </>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <CorrectionModal
+                storyText={worksheetText ?? ""}
+                miscues={sessionMiscues}
+                childId={childId}
+                onWordMastered={handleWordMastered}
+                onDone={() => {
+                  setShowCorrectionModal(false);
+                  goToResults();
+                }}
+              />
+            </div>
           ) : null}
         </div>
       </main>

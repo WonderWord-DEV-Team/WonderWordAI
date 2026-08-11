@@ -1,31 +1,13 @@
 import os
-from pathlib import Path
+from dotenv import load_dotenv
 
-def _load_env_file() -> None:
-    env_path = Path(__file__).with_name(".env")
+load_dotenv()
 
-    if not env_path.exists():
-        return
-
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-
-        key, value = line.split("=", 1)
-        os.environ[key.strip()] = value.strip().strip('"').strip("'")
-
-
-_load_env_file()
+ML_SERVICE_KEY = os.getenv("ML_SERVICE_KEY")
 
 MODEL_NAME = os.getenv("MODEL_NAME", "small")
 DEVICE = os.getenv("DEVICE", "cpu")
-ML_SERVICE_KEY = os.getenv("ML_SERVICE_KEY")
+HF_TOKEN = os.getenv("HF_TOKEN", "")
+CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
 SENTRY_DSN = os.getenv("SENTRY_DSN")
-HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
-CONFIDENCE_THRESHOLD = 0.85
-TTS_PROVIDER = os.getenv("TTS_PROVIDER")
-TTS_VOICE = os.getenv("TTS_VOICE", "default")
-TTS_MODEL = os.getenv("TTS_MODEL", "default")
-TTS_SPEAKING_RATE = os.getenv("TTS_SPEAKING_RATE", "1.0")
+TTS_PROVIDER = os.getenv("TTS_PROVIDER", "")

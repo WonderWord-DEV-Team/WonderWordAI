@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { AudioTranscriptionError, transcribeReadingAudio } from "@/lib/audio/client";
+import { AudioTranscriptionError } from "@/lib/audio/client";
+import { transcribeReadingAudioWithOpenAI } from "@/lib/audio/openai-client";
 import {
   getPersistableReadingEvents,
   isAllowedAudioType,
@@ -12,7 +13,10 @@ import {
 import { parseUserRole, type UserRole } from "@/lib/auth/types";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-import { sessionIdSchema } from "@/lib/sessions/api";
+import {
+  getEffectiveAppUserPlan,
+  sessionIdSchema
+} from "@/lib/sessions/api";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -36,6 +40,8 @@ type ReadingSessionRow = {
 };
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
+  console.log("[audio route] POST start");
+
   if (!hasSupabaseEnv()) {
     return errorResponse("internal_error", "Application configuration is incomplete.", 500);
   }
@@ -47,7 +53,9 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   }
 
   const supabase = createClient();
+  console.log("[audio route] before getAuthenticatedAppUser");
   const { appUser, response: authResponse } = await getAuthenticatedAppUser(supabase);
+  console.log("[audio route] after getAuthenticatedAppUser", { hasAppUser: Boolean(appUser) });
 
   if (authResponse) {
     return authResponse;
@@ -57,11 +65,13 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     return errorResponse("forbidden", "Only child accounts can upload reading audio.", 403);
   }
 
+  console.log("[audio route] before reading_sessions lookup");
   const { data: session, error: sessionError } = await supabase
     .from("reading_sessions")
     .select("id, child_id, end_time")
     .eq("id", parsedSessionId.data)
     .maybeSingle<ReadingSessionRow>();
+  console.log("[audio route] after reading_sessions lookup", { found: Boolean(session), error: sessionError?.code });
 
   if (sessionError) {
     console.error("Failed to fetch reading session for audio upload.", {
@@ -80,17 +90,28 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     return errorResponse("session_closed", "Reading session is already closed.", 409);
   }
 
+  console.log("[audio route] before getEffectiveAppUserPlan");
+  const plan = await getEffectiveAppUserPlan(supabase, appUser);
+  console.log("[audio route] after getEffectiveAppUserPlan", { plan });
+
+  // Free-tier scan limit temporarily disabled per request — re-enable before launch.
+  void plan;
+
+  console.log("[audio route] before getValidatedAudio");
   const { audio, referenceText, response: audioResponse } = await getValidatedAudio(request);
+  console.log("[audio route] after getValidatedAudio", { hasAudio: Boolean(audio) });
 
   if (audioResponse) {
     return audioResponse;
   }
 
   try {
-    const mlResult = await transcribeReadingAudio({
+    console.log("[audio route] before transcribeReadingAudioWithOpenAI");
+    const mlResult = await transcribeReadingAudioWithOpenAI({
       audio,
       referenceText: referenceText ?? undefined
     });
+    console.log("[audio route] after transcribeReadingAudioWithOpenAI");
     const responseData = mapMlTranscriptionToSessionAudio({
       sessionId: session.id,
       result: mlResult

@@ -4,6 +4,7 @@ from typing import Annotated, Optional
 import textstat
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from services.supabase_service import get_supabase_client
 
@@ -34,9 +35,45 @@ POSITIVE_WORDS = {
 }
 
 MAX_GRADE_LEVEL = 3.0
-MIN_WORD_OCCURRENCES = 2
-MAX_WORD_OCCURRENCES = 3
 VISUAL_MARKER = "[VISUAL]"
+
+# If a child doesn't have many known words tracked yet, most vocabulary would
+# otherwise fail the guardrail below even for normal beginner-reader text. In
+# that case, also allow standard early-reading sight words (Dolch + Fry, from
+# public.curriculum_words) so validation reflects realistic beginner
+# vocabulary rather than only whatever's explicitly been logged for the child.
+KNOWN_WORDS_AUGMENT_THRESHOLD = 500
+CURRICULUM_LIST_NAMES = ("dolch", "fry")
+
+# check_vocabulary used to reject a story over a single unknown word, which
+# in practice rejected almost every story -- natural prose built around a
+# small known-words list will very often need one or two ordinary
+# connector/content words the list doesn't happen to cover. A small
+# tolerance keeps the guardrail meaningful (still catches stories that
+# wandered into genuinely unfamiliar vocabulary) without punishing
+# otherwise-good stories for a single stray word.
+MAX_VOCAB_OFFENDERS = 3
+
+# Common irregular verbs a beginner-reader story is likely to produce, mapped
+# to their root form. Not exhaustive -- covers the ones that actually showed
+# up failing vocabulary in practice (flew, sang, swam, ...). Regular verbs
+# and plurals don't need a lookup table; _lemma_candidates() below handles
+# those by stripping suffixes.
+IRREGULAR_VERB_ROOTS = {
+    "flew": "fly", "flown": "fly", "sang": "sing", "sung": "sing",
+    "swam": "swim", "swum": "swim", "ran": "run", "went": "go",
+    "saw": "see", "seen": "see", "drew": "draw", "drawn": "draw",
+    "grew": "grow", "grown": "grow", "threw": "throw", "thrown": "throw",
+    "blew": "blow", "blown": "blow", "knew": "know", "known": "know",
+    "wore": "wear", "worn": "wear", "gave": "give", "given": "give",
+    "took": "take", "taken": "take", "made": "make", "came": "come",
+    "sat": "sit", "ate": "eat", "eaten": "eat", "was": "be", "were": "be",
+    "been": "be", "had": "have", "did": "do", "done": "do", "said": "say",
+    "found": "find", "told": "tell", "held": "hold", "stood": "stand",
+    "left": "leave", "felt": "feel", "kept": "keep", "slept": "sleep",
+    "met": "meet", "began": "begin", "begun": "begin", "sent": "send",
+    "spent": "spend", "built": "build", "heard": "hear", "wagged": "wag",
+}
 
 GuardrailResult = tuple[bool, list[str]]
 
@@ -49,7 +86,54 @@ class ValidateStoryRequest(BaseModel):
 
 
 def _tokenize(text: str) -> list[str]:
-    return re.findall(r"[a-zA-Z']+", text.lower())
+    # Story text embeds inside a JSON string, so the model tends to write
+    # dialogue with a single quote (') instead of a double quote, to avoid
+    # having to escape it -- e.g. 'This is fun!' said the explorer. Since '
+    # is also allowed mid-word for real contractions (don't, it's), a
+    # dialogue-opening/closing quote glues onto the adjacent word (making
+    # "this" show up as "'this", or an isolated closing quote show up as
+    # its own empty-ish token) unless we strip leading/trailing quotes
+    # after extracting each token.
+    raw_tokens = re.findall(r"[a-zA-Z']+", text.lower())
+    return [stripped for token in raw_tokens if (stripped := token.strip("'"))]
+
+
+def _lemma_candidates(word: str) -> set[str]:
+    # A child who knows "play" can read "played" and "playing" -- the
+    # vocabulary guardrail was previously doing exact-token matching only,
+    # so ordinary inflection (past tense, -ing, plurals) failed almost
+    # every generated story even when every root word was known. This
+    # generates plausible root-form candidates for a token; the caller
+    # checks candidates against known_words, not just the raw token.
+    w = word.lower()
+    candidates = {w}
+
+    if w.endswith("ies") and len(w) > 4:
+        candidates.add(w[:-3] + "y")  # "flies" -> "fly"
+    if w.endswith("es") and len(w) > 3:
+        candidates.add(w[:-2])  # "boxes" -> "box"
+    if w.endswith("s") and len(w) > 2 and not w.endswith("ss"):
+        candidates.add(w[:-1])  # "birds" -> "bird"
+
+    if w.endswith("ing") and len(w) > 5:
+        stem = w[:-3]
+        candidates.add(stem)  # "looking" -> "look"
+        candidates.add(stem + "e")  # "smiling" -> "smile"
+        if len(stem) >= 2 and stem[-1] == stem[-2]:
+            candidates.add(stem[:-1])  # "running" -> "run"
+
+    if w.endswith("ed") and len(w) > 4:
+        stem = w[:-2]
+        candidates.add(stem)  # "looked" -> "look"
+        candidates.add(stem + "e")  # "smiled" -> "smile"
+        if len(stem) >= 2 and stem[-1] == stem[-2]:
+            candidates.add(stem[:-1])  # "wagged" -> "wag"
+
+    irregular_root = IRREGULAR_VERB_ROOTS.get(w)
+    if irregular_root:
+        candidates.add(irregular_root)
+
+    return candidates
 
 
 def _count_syllables(word: str) -> int:
@@ -85,12 +169,21 @@ def check_vocabulary(story_text: str, word: str, known_words: list[str]) -> Guar
     target = word.lower()
     tokens = _tokenize(story_text.replace(VISUAL_MARKER, " "))
 
-    offenders = sorted({token for token in tokens if token != target and token not in known_set})
+    offenders = sorted({
+        token
+        for token in tokens
+        if token != target
+        and token not in known_set
+        and not (_lemma_candidates(token) & known_set)
+    })
 
-    if offenders:
+    if len(offenders) > MAX_VOCAB_OFFENDERS:
         preview = ", ".join(offenders[:5])
         more = f" (+{len(offenders) - 5} more)" if len(offenders) > 5 else ""
-        return False, [f"vocabulary: word(s) '{preview}'{more} not in child known_words"]
+        return False, [
+            f"vocabulary: {len(offenders)} word(s) not in child known_words "
+            f"(max {MAX_VOCAB_OFFENDERS} tolerated): '{preview}'{more}"
+        ]
 
     return True, []
 
@@ -125,17 +218,14 @@ def check_content_safety(story_text: str) -> GuardrailResult:
 
 
 def check_structure(story_text: str, word: str) -> GuardrailResult:
+    # `word` is unused now that the target-word occurrence-count constraint
+    # has been removed (a story is no longer required to mention the target
+    # word exactly 2-3 times). Kept in the signature since callers already
+    # pass it and a future structural check may want it again.
     errors: list[str] = []
 
     if VISUAL_MARKER not in story_text:
         errors.append(f"structure: missing {VISUAL_MARKER} marker")
-
-    count = len(re.findall(rf"\b{re.escape(word)}\b", story_text, flags=re.IGNORECASE))
-    if not (MIN_WORD_OCCURRENCES <= count <= MAX_WORD_OCCURRENCES):
-        errors.append(
-            f"structure: target word appears {count} time(s), expected "
-            f"{MIN_WORD_OCCURRENCES}-{MAX_WORD_OCCURRENCES}"
-        )
 
     sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", story_text.strip()) if s.strip()]
     ending = sentences[-1].lower() if sentences else ""
@@ -164,21 +254,56 @@ async def validate_story(
     known_words = request.known_words
     if known_words is None:
         known_words = []
-        try:
+
+        # supabase.table().execute() is blocking network I/O -- run it off
+        # the event loop thread so it can't stall other concurrent requests
+        # (e.g. /transcribe) while it waits on the network.
+        def _fetch_known_words():
             supabase = get_supabase_client()
-            result = (
+            return (
                 supabase.table("child_known_words")
                 .select("words")
                 .eq("child_id", request.child_id)
                 .limit(1)
                 .execute()
             )
+
+        try:
+            result = await run_in_threadpool(_fetch_known_words)
             if result.data:
                 known_words = [str(w) for w in (result.data[0].get("words") or [])]
         except Exception:
             # if we can't fetch known words, vocabulary will fail loudly below
             # rather than silently passing everything
             known_words = []
+
+    if len(known_words) < KNOWN_WORDS_AUGMENT_THRESHOLD:
+        # A child with few tracked known words would otherwise fail
+        # vocabulary on ordinary beginner-reader text. Round out the
+        # allowed vocabulary with standard Dolch/Fry sight words so the
+        # guardrail reflects realistic beginner vocabulary instead.
+        #
+        # supabase.table().execute() is blocking network I/O -- run it off
+        # the event loop thread, same as the known-words fetch above.
+        def _fetch_curriculum_words():
+            supabase = get_supabase_client()
+            return (
+                supabase.table("curriculum_words")
+                .select("word")
+                .in_("list_name", list(CURRICULUM_LIST_NAMES))
+                .execute()
+            )
+
+        try:
+            curriculum_result = await run_in_threadpool(_fetch_curriculum_words)
+            curriculum_words = [
+                str(row["word"]) for row in (curriculum_result.data or []) if row.get("word")
+            ]
+            known_words = list({*known_words, *curriculum_words})
+        except Exception:
+            # if curriculum words can't be fetched, fall back to whatever
+            # known_words we already have rather than failing the request
+            pass
 
     checks: dict[str, GuardrailResult] = {
         "vocabulary": check_vocabulary(request.story_text, request.word, known_words),

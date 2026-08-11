@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { parseUserRole, type UserRole } from "@/lib/auth/types";
+import { createServiceClient } from "@/lib/supabase/service";
+
+export type PlanId = "free" | "plan1" | "plan2";
 
 export const READING_SESSION_SELECT =
   "id, child_id, start_time, end_time, total_words, correct_words, created_at";
@@ -136,6 +139,65 @@ export async function getAuthenticatedAppUser(
     },
     response: null
   };
+}
+
+export async function getEffectiveAppUserPlan(
+  supabase: SupabaseClient,
+  appUser: AppUser
+): Promise<PlanId> {
+  const service = createServiceClient();
+
+  const { data: ownSubscription, error: ownSubscriptionError } = await service
+    .from("subscriptions")
+    .select("plan, status")
+    .eq("user_id", appUser.id)
+    .maybeSingle<{ plan: PlanId; status: string }>();
+
+  if (!ownSubscriptionError && ownSubscription && ownSubscription.status !== "canceled") {
+    return ownSubscription.plan;
+  }
+
+  if (appUser.role === "CHILD") {
+    const { data: parentLink, error: parentLinkError } = await supabase
+      .from("parent_child")
+      .select("parent_id")
+      .eq("child_id", appUser.id)
+      .maybeSingle<{ parent_id: string }>();
+
+    if (!parentLinkError && parentLink?.parent_id) {
+      const { data: parentSubscription, error: parentSubscriptionError } = await service
+        .from("subscriptions")
+        .select("plan, status")
+        .eq("user_id", parentLink.parent_id)
+        .maybeSingle<{ plan: PlanId; status: string }>();
+
+      if (!parentSubscriptionError && parentSubscription && parentSubscription.status !== "canceled") {
+        return parentSubscription.plan;
+      }
+    }
+  }
+
+  return "free";
+}
+
+export async function getSessionScanCountLast7Days(
+  supabase: SupabaseClient,
+  childId: string
+): Promise<number> {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { count, error } = await supabase
+    .from("reading_sessions")
+    .select("id", { count: "exact", head: true })
+    .eq("child_id", childId)
+    .gte("created_at", sevenDaysAgo);
+
+  if (error) {
+    console.error("Failed to count recent reading sessions.", { childId, error });
+    throw error;
+  }
+
+  return typeof count === "number" ? count : 0;
 }
 
 export function toReadingSession(row: ReadingSessionRow): ReadingSession {

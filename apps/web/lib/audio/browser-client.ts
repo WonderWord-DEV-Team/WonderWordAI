@@ -11,7 +11,11 @@ export async function uploadSessionAudio({
   referenceText?: string | null;
 }): Promise<SessionAudioData> {
   const formData = new FormData();
-  formData.append("audio", audio, audio instanceof File ? audio.name : "reading-audio");
+  const ext = audio instanceof File 
+    ? "" 
+    : `.${audio.type.split(";")[0].split("/")[1] || "webm"}`;
+  const filename = audio instanceof File ? audio.name : `reading-audio${ext}`;
+  formData.append("audio", audio, filename);
   if (referenceText?.trim()) {
     formData.append("reference_text", referenceText.trim());
   }

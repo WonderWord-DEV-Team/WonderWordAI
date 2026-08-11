@@ -31,7 +31,7 @@ export const mlActivityRecommendationResponseSchema = z.object({
   recommendation: z.string().nullable()
 });
 
-export type MlActivityRecommendationResponse = z.infer<typeof mlActivityRecommendationResponseSchema>;  
+export type MlActivityRecommendationResponse = z.infer<typeof mlActivityRecommendationResponseSchema>;
 
 const practiceRecommendationSchema = z.object({
   title: z.string(),

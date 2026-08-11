@@ -53,8 +53,8 @@ async function getChildName(): Promise<string> {
 }
 
 export default async function ChildReadPage({ params }: ChildReadPageProps) {
-  await requireRole("CHILD");
+  const auth = await requireRole("CHILD");
   const childName = await getChildName();
 
-  return <ChildReadingShell childName={childName} routeSessionId={params.sessionId} />;
+  return <ChildReadingShell auth={auth} childName={childName} routeSessionId={params.sessionId} />;
 }

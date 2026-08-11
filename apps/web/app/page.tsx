@@ -138,6 +138,15 @@ const faqs = [
   },
 ];
 
+const storyWorlds = [
+  { name: "Space", color: "#2260e6", emoji: "🚀", cta: "Blast off →" },
+  { name: "Dinos", color: "#10a84e", emoji: "🦕", cta: "Roar in →" },
+  { name: "Fairy Tale", color: "#d2237d", emoji: "🏰", cta: "Believe →" },
+  { name: "Heroes", color: "#e65100", emoji: "🦸", cta: "Save day →" },
+  { name: "Food", color: "#6b21a8", emoji: "🍕", cta: "Taste it →" },
+  { name: "Animals", color: "#e6a100", emoji: "🐾", cta: "Meet them →" },
+];
+
 export default function Home() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
