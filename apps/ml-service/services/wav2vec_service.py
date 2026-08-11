@@ -19,10 +19,28 @@ MISCUE_CONFIDENCE_THRESHOLD = float(
 
 # Per-word threshold used by detect_word_miscues(). A word counts as read
 # correctly when at least this share of its expected phonemes survived the
-# alignment against what was actually spoken. Deliberately lenient: a
-# beginning reader's pronunciation is never a perfect phoneme match, and
-# the goal is to catch real substitutions ("dag" for "dog"), not accent.
-WORD_MISCUE_THRESHOLD = float(os.getenv("WORD_MISCUE_THRESHOLD", "0.5"))
+# alignment against what was actually spoken.
+#
+# 0.85 rather than something looser: a one-phoneme substitution in a short
+# word is exactly the error this is meant to catch, and those score high.
+# "hoppy" read for "happy" is /h ɒ p i/ against /h æ p i/ -- 3 of 4 phonemes
+# still match, i.e. 0.75, so anything at or below that misses the very error
+# the feature exists for.
+WORD_MISCUE_THRESHOLD = float(os.getenv("WORD_MISCUE_THRESHOLD", "0.85"))
+
+# Words skipped entirely by the per-word check.
+#
+# Function words are unstressed in running speech, so their vowel reduces to
+# a schwa -- "a" is spoken /ɐ/ or /ə/ in a sentence. But phonemizing a word
+# on its own (which is what detect_word_miscues does, to keep word
+# boundaries) yields the citation form: /eɪ/, the letter's name. The two
+# never match, so every such word is reported as a miscue no matter how
+# correctly the child read it. Rather than pretend to grade them, skip them:
+# they carry no phonics signal worth practicing anyway.
+SKIP_MISCUE_WORDS = {
+    "a", "an", "the", "to", "of", "and", "or", "in", "on", "at", "is",
+    "was", "for", "as", "by", "be", "it", "he", "i", "you", "we",
+}
 
 processor = None
 model = None
@@ -284,6 +302,10 @@ def detect_word_miscues(audio_path: str, reference_text: str) -> dict:
         if expected_count == 0:
             continue
 
+        # See SKIP_MISCUE_WORDS: isolated phonemization can't grade these.
+        if word.lower() in SKIP_MISCUE_WORDS:
+            continue
+
         similarity = matched_per_word[word_index] / expected_count
         if similarity >= WORD_MISCUE_THRESHOLD:
             continue
@@ -300,4 +322,4 @@ def detect_word_miscues(audio_path: str, reference_text: str) -> dict:
         "miscues": miscues,
         "actual_phonemes": actual_phonemes,
         "words": words,
-    }
+    }   

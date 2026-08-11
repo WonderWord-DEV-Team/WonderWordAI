@@ -63,8 +63,7 @@ const DAILY_REFRESH_CARDS: DailyRefreshCard[] = [
     description: "Practice reading with Wonder!",
     accent: "bg-[#ece1fb]",
     textAccent: "text-[#6b21a8]",
-    href: null,
-    action: "read-aloud"
+    href: "/read-aloud"
   }
 ];
 
