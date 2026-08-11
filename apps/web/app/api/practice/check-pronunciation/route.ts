@@ -1,14 +1,11 @@
+import "server-only";
+
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { parseUserRole, type UserRole } from "@/lib/auth/types";
-import { checkPronunciation, PracticeUpstreamError } from "@/lib/practice/client";
-import {
-  pronunciationCheckResponseSchema,
-  type PracticeErrorCode,
-  type PracticeErrorBody
-} from "@/lib/practice/schema";
 // Reused rather than re-implemented: MediaRecorder reports its mimeType
 // with codec parameters attached (e.g. "audio/webm;codecs=opus"), and a
 // naive exact-match check against a bare "audio/webm" string rejects
@@ -17,6 +14,18 @@ import {
 // with it instead of re-deriving (and re-breaking) the same logic.
 import { isAllowedAudioType } from "@/lib/audio/schema";
 
+// IMPORTANT: everything this route needs lives in this single file,
+// deliberately. `apps/web/lib/practice/` already exists in this repo for
+// the parent-dashboard practice-recommendation feature
+// (getPracticeRecommendation, practiceRecommendationResponseSchema, a
+// PracticeErrorCode type, etc.) -- an earlier version of this route
+// introduced a *new* lib/practice/client.ts and lib/practice/schema.ts
+// that collided with and overwrote those files, breaking the build
+// (client-side code importing the practice-recommendation module pulled
+// in this route's "server-only" import transitively). To make that
+// class of bug structurally impossible, this route does not add
+// anything under lib/practice/ at all.
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -24,6 +33,27 @@ export const runtime = "nodejs";
 // reading-session upload limit in /api/sessions/[id]/audio, which allows
 // much longer passages).
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
+
+const DEFAULT_ML_SERVICE_URL = "http://localhost:8000";
+
+// Shape returned directly by the ml-service's /detect-miscue endpoint (see
+// apps/ml-service/services/wav2vec_service.py detect_miscue()).
+const mlPronunciationResponseSchema = z.object({
+  phonemes: z.array(z.string()),
+  similarity: z.number(),
+  confidence: z.boolean()
+});
+
+type RouteErrorCode =
+  | "configuration_error"
+  | "word_missing"
+  | "audio_missing"
+  | "audio_empty"
+  | "audio_too_large"
+  | "invalid_audio_type"
+  | "unauthorized"
+  | "forbidden"
+  | "internal_error";
 
 type AppUser = {
   id: string;
@@ -77,37 +107,58 @@ export async function POST(request: NextRequest) {
     return errorResponse("invalid_audio_type", "Audio format is not supported.", 400);
   }
 
-  try {
-    const mlResult = await checkPronunciation({ audio, word: word.trim() });
-
-    const responsePayload = {
-      correct: mlResult.confidence,
-      similarity: mlResult.similarity,
-      phonemes: mlResult.phonemes
-    };
-
-    const parsed = pronunciationCheckResponseSchema.safeParse(responsePayload);
-    if (!parsed.success) {
-      console.error("Outgoing pronunciation check response validation failed.", parsed.error);
-      return errorResponse("internal_error", "Failed to format the pronunciation check response.", 500);
-    }
-
-    return NextResponse.json(parsed.data);
-  } catch (error) {
-    if (error instanceof PracticeUpstreamError) {
-      return errorResponse(error.code, error.message, error.status);
-    }
-
-    console.error("Unexpected error in check-pronunciation route.", error);
-    return errorResponse("internal_error", "An unexpected error occurred during the pronunciation check.", 500);
+  const serviceKey = process.env.ML_SERVICE_KEY;
+  if (!serviceKey) {
+    return errorResponse("configuration_error", "ML service authentication key is not configured.", 500);
   }
+
+  const baseUrl = process.env.ML_SERVICE_URL || DEFAULT_ML_SERVICE_URL;
+  const upstreamForm = new FormData();
+  upstreamForm.set("audio", audio, audio.name || "practice-attempt.webm");
+  upstreamForm.set("reference_text", word.trim());
+
+  let upstreamResponse: Response;
+  try {
+    upstreamResponse = await fetch(`${baseUrl}/detect-miscue`, {
+      method: "POST",
+      headers: { "X-Internal-Key": serviceKey },
+      body: upstreamForm
+    });
+  } catch (error) {
+    console.error("Failed to connect to ML service for pronunciation check.", error);
+    return errorResponse("internal_error", "Unable to connect to the pronunciation check service.", 500);
+  }
+
+  if (upstreamResponse.status === 401 || upstreamResponse.status === 403) {
+    return errorResponse("unauthorized", "Unauthorized access to pronunciation check service.", upstreamResponse.status);
+  }
+
+  if (!upstreamResponse.ok) {
+    const errorBody = await upstreamResponse.json().catch(() => null);
+    const message = errorBody?.detail || "Upstream ML service returned an error.";
+    return errorResponse("internal_error", message, upstreamResponse.status);
+  }
+
+  const upstreamData = await upstreamResponse.json().catch(() => null);
+  const parsedUpstream = mlPronunciationResponseSchema.safeParse(upstreamData);
+
+  if (!parsedUpstream.success) {
+    console.error("ML pronunciation response validation failed.", parsedUpstream.error);
+    return errorResponse("internal_error", "Pronunciation check service returned a malformed response.", 500);
+  }
+
+  return NextResponse.json({
+    correct: parsedUpstream.data.confidence,
+    similarity: parsedUpstream.data.similarity,
+    phonemes: parsedUpstream.data.phonemes
+  });
 }
 
 async function getAuthenticatedAppUser(
   supabase: SupabaseClient
 ): Promise<
   | { appUser: AppUser; response: null }
-  | { appUser: null; response: NextResponse<PracticeErrorBody> }
+  | { appUser: null; response: NextResponse }
 > {
   const {
     data: { user },
@@ -152,6 +203,6 @@ async function getAuthenticatedAppUser(
   };
 }
 
-function errorResponse(code: PracticeErrorCode, message: string, status: number) {
-  return NextResponse.json<PracticeErrorBody>({ error: { code, message } }, { status });
-}   
+function errorResponse(code: RouteErrorCode, message: string, status: number) {
+  return NextResponse.json({ error: { code, message } }, { status });
+}
