@@ -141,6 +141,11 @@ export function ChildHomeClient({
     router.push(`/child/${id}/read`);
   };
 
+  const handleStartStoryWorld = async (theme: string) => {
+    const id = await ensureSession();
+    router.push(`/child/${id}/story?theme=${theme.toLowerCase()}`);
+  };
+
   const handleBackToParent = async () => {
     const result = await switchToParent();
     if (result.success) {
@@ -339,21 +344,20 @@ export function ChildHomeClient({
           </h2>
           <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
             {STORY_WORLDS.map((world) => (
-              <div
+              <button
                 key={world.name}
-                className="relative flex flex-col items-center gap-2 rounded-2xl p-4 text-center text-white opacity-80"
+                type="button"
+                onClick={() => handleStartStoryWorld(world.name)}
+                className="relative flex flex-col items-center gap-2 rounded-2xl p-4 text-center text-white transition hover:scale-[1.05] hover:shadow-md cursor-pointer active:scale-95"
                 style={{ backgroundColor: world.color }}
               >
-                <div className="absolute right-2 top-2">
-                  <ComingSoonBadge />
-                </div>
                 <span className="mt-4 text-3xl">{world.emoji}</span>
                 <span className="text-sm font-black">{world.name}</span>
-              </div>
+              </button>
             ))}
           </div>
           <p className="mt-3 text-xs leading-5 text-[#8a8a8a]">
-            AI-generated themed stories are coming soon — for now, scan a worksheet above to start reading.
+            Choose a theme to generate an interactive AI story!
           </p>
         </section>
       </main>
