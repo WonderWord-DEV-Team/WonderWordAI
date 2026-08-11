@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { AudioTranscriptionError, transcribeReadingAudio } from "@/lib/audio/client";
+import { AudioTranscriptionError } from "@/lib/audio/client";
+import { transcribeReadingAudioWithOpenAI } from "@/lib/audio/openai-client";
 import {
   getPersistableReadingEvents,
   isAllowedAudioType,
@@ -105,12 +106,12 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   }
 
   try {
-    console.log("[audio route] before transcribeReadingAudio");
-    const mlResult = await transcribeReadingAudio({
+    console.log("[audio route] before transcribeReadingAudioWithOpenAI");
+    const mlResult = await transcribeReadingAudioWithOpenAI({
       audio,
       referenceText: referenceText ?? undefined
     });
-    console.log("[audio route] after transcribeReadingAudio");
+    console.log("[audio route] after transcribeReadingAudioWithOpenAI");
     const responseData = mapMlTranscriptionToSessionAudio({
       sessionId: session.id,
       result: mlResult
