@@ -17,7 +17,12 @@ export function AuthLayout({ children, speechText }: AuthLayoutProps) {
               <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-4 h-4 bg-white rotate-45" />
             </div>
           )}
-          <div className="w-40 h-40 rounded-full bg-white/90 shadow-xl" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/mascot.svg"
+            alt="Fox, the WonderWord mascot"
+            className="w-40 h-40 rounded-full bg-white/90 shadow-xl p-5 object-contain"
+          />
           <div className="text-center">
             <p className="text-white text-2xl font-black">Hi, I&apos;m Fox!</p>
             <p className="text-white/90 text-sm">Let&apos;s read together! ✨</p>

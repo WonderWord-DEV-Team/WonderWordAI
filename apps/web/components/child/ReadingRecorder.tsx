@@ -1,4 +1,4 @@
-  "use client";
+"use client";
 
   import { Pause, Play, RotateCcw, Square, Waves } from "lucide-react";
   import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -173,6 +173,17 @@
     }, [sessionId]);
 
     useEffect(() => {
+      // Re-assert on every run, not just on first mount. This effect's deps
+      // aren't empty -- it depends on five callbacks -- so React re-runs it
+      // (cleanup first) whenever any of their identities change. The cleanup
+      // sets isMountedRef to false, and without restoring it here the
+      // component stays permanently flagged as unmounted while still on
+      // screen. Every `if (!isMountedRef.current) return` then fires, so the
+      // recorder never leaves "processing": the status pill stays on
+      // PROCESSING, the message stays on "Stopping the recording...", and the
+      // audio is never attached, leaving Play/Pause/Restart disabled.
+      isMountedRef.current = true;
+
       return () => {
         isMountedRef.current = false;
         shouldSubmitRecordingRef.current = false;

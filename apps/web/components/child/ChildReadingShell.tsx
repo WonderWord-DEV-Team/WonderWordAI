@@ -92,12 +92,16 @@ export function ChildReadingShell({ auth, childName, routeSessionId }: ChildRead
   const handleTranscriptionComplete = (result: SessionAudioData) => {
     // Batch, end-of-session correction feedback (per product decision:
     // simpler than live per-word miscue detection).
+    //
+    // The correction modal is deliberately NOT opened here. It used to pop
+    // automatically whenever there were miscues, which covered the screen at
+    // exactly the moment the child can play their recording back and see the
+    // misread words highlighted in the passage. That playback is the point of
+    // this screen, so the modal now waits for the child to ask for it via the
+    // "Practice my words" button below.
     setLatestTranscription(result);
     setSessionMiscues(result.miscues);
     setHasResults(true);
-    if (result.miscues.length > 0) {
-      setShowCorrectionModal(true);
-    }
   };
 
   // Called from the Practice tab (via CorrectionModal) when the child
@@ -166,7 +170,7 @@ export function ChildReadingShell({ auth, childName, routeSessionId }: ChildRead
           </a>
 
           <div className="mb-8">
-            <h1 className="text-4xl font-serif font-bold text-[#a3352b] tracking-tight sm:text-5xl font-body">
+            <h1 className="text-4xl font-extrabold text-[#2b2b2b] tracking-tight sm:text-5xl font-body">
               Reading Mode
             </h1>
             <p className="mt-2 text-lg text-[#8a8a8a] font-body">
@@ -240,7 +244,16 @@ export function ChildReadingShell({ auth, childName, routeSessionId }: ChildRead
 
               {/* Once a reading pass finishes, let the child jump to their results */}
               {hasResults ? (
-                <div className="flex justify-center mb-4">
+                <div className="flex flex-wrap justify-center gap-4 mb-4">
+                  {sessionMiscues.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowCorrectionModal(true)}
+                      className="rounded-full bg-[#ff6868] hover:bg-[#ef5353] px-8 py-3 text-base font-black text-white shadow-sm transition"
+                    >
+                      Practice my words ({sessionMiscues.length})
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={goToResults}
@@ -294,7 +307,9 @@ export function ChildReadingShell({ auth, childName, routeSessionId }: ChildRead
             </>
           )}
 
-          {/* Correction modal popup — shown after a completed reading pass with miscues */}
+          {/* Correction modal popup — opened on request via "Practice my words",
+              never automatically, so it can't cover the playback the child
+              uses to hear their recording and see the misread words. */}
           {showCorrectionModal && currentMiscue ? (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
               <CorrectionModal
@@ -303,8 +318,11 @@ export function ChildReadingShell({ auth, childName, routeSessionId }: ChildRead
                 childId={childId}
                 onWordMastered={handleWordMastered}
                 onDone={() => {
+                  // Closing returns to the reading screen rather than jumping
+                  // to results: the child chose to open this, so they may well
+                  // want to replay their recording afterwards. "See my
+                  // results" is still right there when they're ready.
                   setShowCorrectionModal(false);
-                  goToResults();
                 }}
               />
             </div>
