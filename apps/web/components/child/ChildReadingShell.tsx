@@ -33,6 +33,7 @@ export function ChildReadingShell({ auth, childName, routeSessionId }: ChildRead
     worksheetStatus,
     setWorksheetStatus,
     setOcrResult,
+    latestTranscription,
     setLatestTranscription,
     clearOcrResult
   } = useChildSession();
@@ -99,6 +100,31 @@ export function ChildReadingShell({ auth, childName, routeSessionId }: ChildRead
     }
   };
 
+  // Called from the Practice tab (via CorrectionModal) when the child
+  // pronounces a practice word correctly within the attempt cap. Removes
+  // that word from both: sessionMiscues (drives the correction modal /
+  // karaoke highlighting for the rest of THIS session) and
+  // latestTranscription (what the results screen reads for its
+  // correct/accuracy counts) -- otherwise a word mastered here would keep
+  // counting as a miss on the results page even though the child just
+  // demonstrated they can read it.
+  const handleWordMastered = (word: string) => {
+    const normalized = normalizeKaraokeWord(word);
+
+    setSessionMiscues((prev) =>
+      prev.filter((miscue) => normalizeKaraokeWord(miscue.word) !== normalized)
+    );
+
+    if (latestTranscription) {
+      setLatestTranscription({
+        ...latestTranscription,
+        miscues: latestTranscription.miscues.filter(
+          (miscue) => normalizeKaraokeWord(miscue.word) !== normalized
+        )
+      });
+    }
+  };
+
   const goToResults = () => {
     router.push(`/child/${sessionId}/results`);
   };
@@ -140,7 +166,7 @@ export function ChildReadingShell({ auth, childName, routeSessionId }: ChildRead
           </a>
 
           <div className="mb-8">
-            <h1 className="text-4xl font-extrabold text-[#2b2b2b] tracking-tight sm:text-5xl font-body">
+            <h1 className="text-4xl font-serif font-bold text-[#a3352b] tracking-tight sm:text-5xl font-body">
               Reading Mode
             </h1>
             <p className="mt-2 text-lg text-[#8a8a8a] font-body">
@@ -275,6 +301,7 @@ export function ChildReadingShell({ auth, childName, routeSessionId }: ChildRead
                 storyText={worksheetText ?? ""}
                 miscues={sessionMiscues}
                 childId={childId}
+                onWordMastered={handleWordMastered}
                 onDone={() => {
                   setShowCorrectionModal(false);
                   goToResults();

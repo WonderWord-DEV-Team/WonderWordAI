@@ -35,6 +35,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   return (
+    
     <AuthLayout speechText="Let's read your homework today!">
       <LoginForm initialError={getInitialError(searchParams?.error)} />
     </AuthLayout>

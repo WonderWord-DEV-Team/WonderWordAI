@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { parseUserRole } from "@/lib/auth/types";
-import { generateStoryWithClaude, mapStoryUpstreamError } from "@/lib/stories/client";
+import { generateStoryWithClaude, generateFallbackStory, mapStoryUpstreamError } from "@/lib/stories/client";
 import { validateStoryWithGuardrails, StoryValidationUpstreamError } from "@/lib/stories/validate-client";
 import { lookupPhonicsRule, PhonicsUpstreamError } from "@/lib/phonics/client";
 import { searchUnsplash } from "@/lib/illustrations/unsplash/client";
@@ -20,10 +20,38 @@ export const dynamic = "force-dynamic";
 // caps how many generate+validate round trips we'll pay for before giving up
 const MAX_GENERATION_ATTEMPTS = 3;
 
+// Separate, smaller cap for the relaxed fallback stage below -- it isn't
+// fighting a fixed vocabulary list, so it should converge fast if it's
+// going to converge at all.
+const MAX_FALLBACK_ATTEMPTS = 2;
+
+// A fixed score used only for the absolute-last-resort hardcoded template
+// (buildLastResortStory), for when even the relaxed Claude fallback fails
+// (e.g. the API itself is down). It isn't produced by the guardrail
+// pipeline -- there's nothing to grade -- so this is just a marker value,
+// not a real score out of 100.
+const LAST_RESORT_VALIDATION_SCORE = 25;
+
 type AppUser = {
   id: string;
   role: "CHILD" | "PARENT";
 };
+
+// Absolute last resort, used only if even the relaxed fallback generation
+// (generateFallbackStory, which still calls Claude) fails outright -- e.g.
+// the Anthropic API is unreachable. This is a fixed template, not a real
+// story, so it's intentionally a last line of defense rather than the
+// primary fallback.
+function buildLastResortStory(word: string): string {
+  const w = word.toLowerCase();
+
+  return [
+    `Look! There is a ${w}.`,
+    `"I like the ${w}," said the little cat.`,
+    `[VISUAL]`,
+    `The cat and the ${w} play. What a happy day!`
+  ].join("\n\n");
+}
 
 export async function POST(request: NextRequest) {
   if (!hasSupabaseEnv()) {
@@ -186,8 +214,10 @@ export async function POST(request: NextRequest) {
     // GENERATE + VALIDATE, with up to MAX_GENERATION_ATTEMPTS retries using the
     // previous attempt's guardrail errors as feedback for the next attempt.
     let finalStoryText: string | null = null;
+    let finalValidationScore: number | null = null;
     let lastValidation: ValidateStoryResponse | null = null;
     let feedback: string[] | undefined;
+    let usedLastResort = false;
 
     for (let attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt += 1) {
       let storyResult;
@@ -241,29 +271,94 @@ export async function POST(request: NextRequest) {
 
       if (validation.is_valid) {
         finalStoryText = storyResult.story_text;
+        finalValidationScore = validation.validation_score;
         break;
       }
 
       feedback = validation.errors;
     }
 
+    // STAGE 2 -- relaxed fallback. The strict, known-words-locked loop
+    // above exhausted its attempts (most commonly: a child early in
+    // onboarding whose known_words + Dolch/Fry still can't cover ordinary
+    // story vocabulary -- see the "adventure" vocabulary-leak issue this
+    // was built to work around). Rather than drop straight to a hardcoded
+    // template, ask Claude for a real, much shorter story without a fixed
+    // vocabulary list, and only check the guardrails that don't depend on
+    // one (complexity, content safety, structure) -- vocabulary is
+    // intentionally not enforced here, since "no fixed list" is the whole
+    // point of this stage.
+    if (!finalStoryText) {
+      console.log(
+        `[stories/generate] word "${word}" strict generation failed after ${MAX_GENERATION_ATTEMPTS} attempt(s); ` +
+          `trying relaxed fallback generation.`
+      );
+
+      for (let attempt = 1; attempt <= MAX_FALLBACK_ATTEMPTS; attempt += 1) {
+        let fallbackResult;
+        try {
+          fallbackResult = await generateFallbackStory({
+            apiKey,
+            word,
+            phonicsCategory,
+            phonicsGrounding
+          });
+        } catch (fallbackGenerationError) {
+          console.log(
+            `[stories/generate] fallback attempt ${attempt}/${MAX_FALLBACK_ATTEMPTS} for word "${word}": FAILED to generate`
+          );
+          continue;
+        }
+
+        const fallbackValidation = await validateStoryWithGuardrails({
+          storyText: fallbackResult.story_text,
+          childId,
+          word,
+          knownWords
+        });
+
+        // Vocabulary is deliberately excluded from the pass/fail decision
+        // here -- this stage has no fixed word list to check against.
+        const passesNonVocabGuardrails =
+          fallbackValidation.guardrails.complexity === "passed" &&
+          fallbackValidation.guardrails.content_safety === "passed" &&
+          fallbackValidation.guardrails.structure === "passed";
+
+        console.log(
+          `[stories/generate] fallback attempt ${attempt}/${MAX_FALLBACK_ATTEMPTS} for word "${word}": ` +
+            `${passesNonVocabGuardrails ? "PASSED" : "FAILED"} (vocabulary check skipped)`
+        );
+
+        if (passesNonVocabGuardrails) {
+          finalStoryText = fallbackResult.story_text;
+          finalValidationScore = fallbackValidation.validation_score;
+          break;
+        }
+      }
+    }
+
     const imageUrl = await imageUrlPromise;
 
-    if (!finalStoryText || !lastValidation?.is_valid) {
-      const issues = lastValidation?.errors.length ? ` Last issues: ${lastValidation.errors.join("; ")}` : "";
+    // STAGE 3 -- absolute last resort. Only reached if even the relaxed
+    // Claude fallback above couldn't produce anything usable (e.g. the
+    // Anthropic API itself is down for both stages). This is the one
+    // actual hardcoded template in the flow, kept intentionally minimal
+    // as a safety net rather than the default experience.
+    if (!finalStoryText) {
       console.log(
-        `[stories/generate] word "${word}" generation FAILED after ${MAX_GENERATION_ATTEMPTS} attempt(s).`
+        `[stories/generate] word "${word}" relaxed fallback also failed; using last-resort template.`
       );
-      console.log("Final validation state:", lastValidation);
-      return errorResponse(
-        "story_validation_failed",
-        `We could not generate a story that passed all safety and reading-level checks after ${MAX_GENERATION_ATTEMPTS} attempts.${issues}`,
-        502
-      );
+      console.log("Final validation state before last resort:", lastValidation);
+
+      finalStoryText = buildLastResortStory(word);
+      finalValidationScore = LAST_RESORT_VALIDATION_SCORE;
+      usedLastResort = true;
     }
 
     console.log(
-      `[stories/generate] word "${word}" generation PASSED (validation score: ${lastValidation.validation_score}).`
+      usedLastResort
+        ? `[stories/generate] word "${word}" generation used the LAST-RESORT template.`
+        : `[stories/generate] word "${word}" generation succeeded (validation score: ${finalValidationScore}).`
     );
 
     // Saves the generated story to the database
@@ -274,7 +369,7 @@ export async function POST(request: NextRequest) {
         word,
         story_text: finalStoryText,
         image_url: imageUrl,
-        validation_score: lastValidation.validation_score,
+        validation_score: finalValidationScore,
         phonics_category: phonicsCategory,
         theme: theme || null
       })

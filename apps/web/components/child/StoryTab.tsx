@@ -1,7 +1,8 @@
 import { StoryImage, type StoryImageStatus } from "@/components/child/StoryImage";
 
 // ticket: implement image rendering inside story tab (skeleton + placeholder)
-// layout spec: square image beside a bordered text box (per design mockup)
+// layout: image centered above a bordered text box (per Matheus's feedback --
+// side-by-side made the image look stretched and cramped the story text).
 //
 // The outer card below *is* the "story placeholder" -- both the illustration
 // (StoryImage) and the generated story text render inside of it together,
@@ -60,10 +61,10 @@ export function StoryTab({
   normalizeWord = defaultNormalizeWord
 }: StoryTabProps) {
   return (
-    <div className="flex flex-col gap-4 rounded-[var(--radius-card)] bg-white/88 p-5 sm:flex-row">
+    <div className="flex flex-col items-center gap-4 rounded-[var(--radius-card)] bg-white/88 p-5">
       <StoryImage status={imageStatus} imageUrl={imageUrl} className="shrink-0" />
 
-      <div className="flex-1 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4">
         {storyText ? (
           <p className="whitespace-pre-wrap text-lg font-extrabold leading-9 text-navy">
             {renderStoryText(storyText, highlightWords, normalizeWord)}

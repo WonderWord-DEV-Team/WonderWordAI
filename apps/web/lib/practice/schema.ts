@@ -1,58 +1,39 @@
 import { z } from "zod";
 
-// ticket: integrate playful practice recommendations into parent dashboard
-export const practiceRecommendationRequestSchema = z.object({
-  childId: z.string().min(1, "childId is required"),
-  phonicsCategory: z.string().min(1, "phonicsCategory is required")
+export type PracticeErrorCode =
+  | "configuration_error"
+  | "word_missing"
+  | "audio_missing"
+  | "audio_empty"
+  | "audio_too_large"
+  | "invalid_audio_type"
+  | "unauthorized"
+  | "forbidden"
+  | "internal_error";
+
+export type PracticeErrorBody = {
+  error: {
+    code: PracticeErrorCode;
+    message: string;
+  };
+};
+
+// Shape returned directly by the ml-service's /detect-miscue endpoint (see
+// services/wav2vec_service.py detect_miscue()).
+export const mlPronunciationResponseSchema = z.object({
+  phonemes: z.array(z.string()),
+  similarity: z.number(),
+  confidence: z.boolean()
 });
 
-export type PracticeRecommendationRequest = z.infer<typeof practiceRecommendationRequestSchema>;
+export type MlPronunciationResponse = z.infer<typeof mlPronunciationResponseSchema>;
 
-const practiceMaterialSchema = z.object({
-  icon: z.string(),
-  label: z.string()
+// Shape this Next.js route returns to the client -- renamed fields so the
+// frontend doesn't need to know that "confidence" is the pass/fail signal.
+export const pronunciationCheckResponseSchema = z.object({
+  correct: z.boolean(),
+  similarity: z.number(),
+  phonemes: z.array(z.string())
 });
 
-const practiceStepSchema = z.object({
-  title: z.string(),
-  description: z.string()
-});
-
-// shape returned by the ml service's POST /activity-recommendation
-export const mlActivityRecommendationResponseSchema = z.object({
-  title: z.string(),
-  description: z.string(),
-  pedagogy: z.string(),
-  phonics_category: z.string(),
-  duration_minutes: z.number(),
-  materials: z.array(practiceMaterialSchema),
-  example_words: z.array(z.string()),
-  steps: z.array(practiceStepSchema),
-  recommendation: z.string().nullable()
-});
-
-export type MlActivityRecommendationResponse = z.infer<typeof mlActivityRecommendationResponseSchema>;  
-
-const practiceRecommendationSchema = z.object({
-  title: z.string(),
-  description: z.string(),
-  pedagogy: z.string(),
-  phonicsCategory: z.string(),
-  durationMinutes: z.number(),
-  materials: z.array(practiceMaterialSchema),
-  exampleWords: z.array(z.string()),
-  steps: z.array(practiceStepSchema),
-  recommendation: z.string().nullable()
-});
-
-// shape returned by our own /api/practice-recommendation route
-export const practiceRecommendationResponseSchema = z.object({
-  data: practiceRecommendationSchema
-});
-
-export type PracticeRecommendationResponse = z.infer<typeof practiceRecommendationResponseSchema>;
-export type PracticeRecommendation = z.infer<typeof practiceRecommendationSchema>;
-export type PracticeMaterial = z.infer<typeof practiceMaterialSchema>;
-export type PracticeStep = z.infer<typeof practiceStepSchema>;
-
-export type PracticeErrorCode = "configuration_error" | "invalid_request" | "internal_error" | "forbidden";
+export type PronunciationCheckResponse = z.infer<typeof pronunciationCheckResponseSchema>;

@@ -45,6 +45,36 @@ VISUAL_MARKER = "[VISUAL]"
 KNOWN_WORDS_AUGMENT_THRESHOLD = 500
 CURRICULUM_LIST_NAMES = ("dolch", "fry")
 
+# check_vocabulary used to reject a story over a single unknown word, which
+# in practice rejected almost every story -- natural prose built around a
+# small known-words list will very often need one or two ordinary
+# connector/content words the list doesn't happen to cover. A small
+# tolerance keeps the guardrail meaningful (still catches stories that
+# wandered into genuinely unfamiliar vocabulary) without punishing
+# otherwise-good stories for a single stray word.
+MAX_VOCAB_OFFENDERS = 3
+
+# Common irregular verbs a beginner-reader story is likely to produce, mapped
+# to their root form. Not exhaustive -- covers the ones that actually showed
+# up failing vocabulary in practice (flew, sang, swam, ...). Regular verbs
+# and plurals don't need a lookup table; _lemma_candidates() below handles
+# those by stripping suffixes.
+IRREGULAR_VERB_ROOTS = {
+    "flew": "fly", "flown": "fly", "sang": "sing", "sung": "sing",
+    "swam": "swim", "swum": "swim", "ran": "run", "went": "go",
+    "saw": "see", "seen": "see", "drew": "draw", "drawn": "draw",
+    "grew": "grow", "grown": "grow", "threw": "throw", "thrown": "throw",
+    "blew": "blow", "blown": "blow", "knew": "know", "known": "know",
+    "wore": "wear", "worn": "wear", "gave": "give", "given": "give",
+    "took": "take", "taken": "take", "made": "make", "came": "come",
+    "sat": "sit", "ate": "eat", "eaten": "eat", "was": "be", "were": "be",
+    "been": "be", "had": "have", "did": "do", "done": "do", "said": "say",
+    "found": "find", "told": "tell", "held": "hold", "stood": "stand",
+    "left": "leave", "felt": "feel", "kept": "keep", "slept": "sleep",
+    "met": "meet", "began": "begin", "begun": "begin", "sent": "send",
+    "spent": "spend", "built": "build", "heard": "hear", "wagged": "wag",
+}
+
 GuardrailResult = tuple[bool, list[str]]
 
 
@@ -66,6 +96,44 @@ def _tokenize(text: str) -> list[str]:
     # after extracting each token.
     raw_tokens = re.findall(r"[a-zA-Z']+", text.lower())
     return [stripped for token in raw_tokens if (stripped := token.strip("'"))]
+
+
+def _lemma_candidates(word: str) -> set[str]:
+    # A child who knows "play" can read "played" and "playing" -- the
+    # vocabulary guardrail was previously doing exact-token matching only,
+    # so ordinary inflection (past tense, -ing, plurals) failed almost
+    # every generated story even when every root word was known. This
+    # generates plausible root-form candidates for a token; the caller
+    # checks candidates against known_words, not just the raw token.
+    w = word.lower()
+    candidates = {w}
+
+    if w.endswith("ies") and len(w) > 4:
+        candidates.add(w[:-3] + "y")  # "flies" -> "fly"
+    if w.endswith("es") and len(w) > 3:
+        candidates.add(w[:-2])  # "boxes" -> "box"
+    if w.endswith("s") and len(w) > 2 and not w.endswith("ss"):
+        candidates.add(w[:-1])  # "birds" -> "bird"
+
+    if w.endswith("ing") and len(w) > 5:
+        stem = w[:-3]
+        candidates.add(stem)  # "looking" -> "look"
+        candidates.add(stem + "e")  # "smiling" -> "smile"
+        if len(stem) >= 2 and stem[-1] == stem[-2]:
+            candidates.add(stem[:-1])  # "running" -> "run"
+
+    if w.endswith("ed") and len(w) > 4:
+        stem = w[:-2]
+        candidates.add(stem)  # "looked" -> "look"
+        candidates.add(stem + "e")  # "smiled" -> "smile"
+        if len(stem) >= 2 and stem[-1] == stem[-2]:
+            candidates.add(stem[:-1])  # "wagged" -> "wag"
+
+    irregular_root = IRREGULAR_VERB_ROOTS.get(w)
+    if irregular_root:
+        candidates.add(irregular_root)
+
+    return candidates
 
 
 def _count_syllables(word: str) -> int:
@@ -101,12 +169,21 @@ def check_vocabulary(story_text: str, word: str, known_words: list[str]) -> Guar
     target = word.lower()
     tokens = _tokenize(story_text.replace(VISUAL_MARKER, " "))
 
-    offenders = sorted({token for token in tokens if token != target and token not in known_set})
+    offenders = sorted({
+        token
+        for token in tokens
+        if token != target
+        and token not in known_set
+        and not (_lemma_candidates(token) & known_set)
+    })
 
-    if offenders:
+    if len(offenders) > MAX_VOCAB_OFFENDERS:
         preview = ", ".join(offenders[:5])
         more = f" (+{len(offenders) - 5} more)" if len(offenders) > 5 else ""
-        return False, [f"vocabulary: word(s) '{preview}'{more} not in child known_words"]
+        return False, [
+            f"vocabulary: {len(offenders)} word(s) not in child known_words "
+            f"(max {MAX_VOCAB_OFFENDERS} tolerated): '{preview}'{more}"
+        ]
 
     return True, []
 

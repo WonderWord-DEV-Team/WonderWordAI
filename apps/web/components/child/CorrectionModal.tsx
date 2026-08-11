@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SessionAudioMiscue } from "@/lib/audio/schema";
 import { StoryTab, renderStoryText } from "@/components/child/StoryTab";
 import { useWordStory } from "@/hooks/useWordStory";
+import { chooseSupportedRecordingMimeType, stopMediaStreamTracks } from "@/lib/karaoke/timeline";
 
 type Tab = "story" | "phonics" | "listen" | "practice";
 
@@ -22,6 +23,11 @@ type CorrectionModalProps = {
   // omitted (or null), the modal falls back to showing the original
   // worksheet text instead of generating anything.
   childId?: string | null;
+  // Called when the child successfully pronounces a practice word within
+  // the attempt cap (see PracticeTab). The caller is expected to remove
+  // this word from whatever feeds the results screen's error count --
+  // this component only reports the event, it doesn't own that state.
+  onWordMastered?: (word: string) => void;
   onDone: () => void;
 };
 
@@ -40,6 +46,7 @@ export default function CorrectionModal({
   storyText,
   miscues,
   childId = null,
+  onWordMastered,
   onDone,
 }: CorrectionModalProps) {
   // Track *which tab* we're on within the current word, rather than just
@@ -161,7 +168,7 @@ export default function CorrectionModal({
         )}
 
         {activeTab === "practice" && (
-          <PracticeTab miscue={currentMiscue} />
+          <PracticeTab miscue={currentMiscue} onMastered={onWordMastered} />
         )}
       </div>
 
@@ -590,13 +597,236 @@ function ListenTab({
 /* Practice                                                                    */
 /* -------------------------------------------------------------------------- */
 
+type PracticeRecordingState =
+  | "idle"
+  | "recording"
+  | "checking"
+  | "correct"
+  | "incorrect"
+  | "exhausted"
+  | "error";
+
+// How long we record before auto-stopping and checking. This is a single
+// word, not a passage, so the child shouldn't need to remember to press
+// stop themselves -- but they still can, via the same button.
+const PRACTICE_AUTO_STOP_MS = 4000;
+
+// Cap retries so a child who genuinely can't produce the sound yet isn't
+// stuck failing indefinitely -- after 3 misses we back off and leave the
+// word counted as needing practice, rather than pressuring another try.
+const MAX_PRACTICE_ATTEMPTS = 3;
+
 function PracticeTab({
   miscue,
+  onMastered,
 }: {
   miscue: SessionAudioMiscue | null;
+  onMastered?: (word: string) => void;
 }) {
-  const [isListening, setIsListening] =
-    useState(false);
+  const streamRef = useRef<MediaStream | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const autoStopTimeoutRef = useRef<number | null>(null);
+  const isMountedRef = useRef(true);
+
+  const [recordingState, setRecordingState] =
+    useState<PracticeRecordingState>("idle");
+  const [message, setMessage] = useState<string | null>(null);
+  const [similarity, setSimilarity] = useState<number | null>(null);
+  const [attempts, setAttempts] = useState(0);
+
+  // Starting a new word (or moving to the next miscue) should reset any
+  // previous attempt's result instead of carrying it over.
+  useEffect(() => {
+    setRecordingState("idle");
+    setMessage(null);
+    setSimilarity(null);
+    setAttempts(0);
+  }, [miscue?.word]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+      if (autoStopTimeoutRef.current !== null) {
+        window.clearTimeout(autoStopTimeoutRef.current);
+      }
+      if (recorderRef.current?.state === "recording") {
+        recorderRef.current.stop();
+      }
+      stopMediaStreamTracks(streamRef.current);
+    };
+  }, []);
+
+  const clearAutoStop = () => {
+    if (autoStopTimeoutRef.current !== null) {
+      window.clearTimeout(autoStopTimeoutRef.current);
+      autoStopTimeoutRef.current = null;
+    }
+  };
+
+  const handleRecordingStopped = async (mimeType: string, word: string) => {
+    clearAutoStop();
+    stopMediaStreamTracks(streamRef.current);
+    streamRef.current = null;
+    recorderRef.current = null;
+
+    const audioBlob = new Blob(chunksRef.current, { type: mimeType });
+    chunksRef.current = [];
+
+    if (audioBlob.size === 0) {
+      if (isMountedRef.current) {
+        setRecordingState("error");
+        setMessage("No audio was captured. Please try again.");
+      }
+      return;
+    }
+
+    if (isMountedRef.current) {
+      setRecordingState("checking");
+      setMessage(null);
+    }
+
+    try {
+      const formData = new FormData();
+      formData.set("audio", audioBlob, "practice-attempt.webm");
+      formData.set("word", word);
+
+      const response = await fetch("/api/practice/check-pronunciation", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error?.message || "Could not check that pronunciation."
+        );
+      }
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      setSimilarity(typeof data?.similarity === "number" ? data.similarity : null);
+
+      if (data?.correct) {
+        setRecordingState("correct");
+        onMastered?.(word);
+        return;
+      }
+
+      // Wrong attempt -- count it, then decide whether there's another
+      // try left or whether we've hit the cap.
+      setAttempts((prev) => {
+        const next = prev + 1;
+        setRecordingState(next >= MAX_PRACTICE_ATTEMPTS ? "exhausted" : "incorrect");
+        return next;
+      });
+    } catch (err) {
+      if (!isMountedRef.current) {
+        return;
+      }
+      setRecordingState("error");
+      setMessage(
+        err instanceof Error ? err.message : "Could not check that pronunciation."
+      );
+    }
+  };
+
+  const startRecording = async () => {
+    if (!miscue?.word) {
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia || typeof window.MediaRecorder === "undefined") {
+      setRecordingState("error");
+      setMessage("This browser can't record audio. Try Chrome, Edge, or Safari 14.1+.");
+      return;
+    }
+
+    const mimeType = chooseSupportedRecordingMimeType({
+      isTypeSupported: window.MediaRecorder.isTypeSupported.bind(window.MediaRecorder),
+    });
+
+    if (!mimeType) {
+      setRecordingState("error");
+      setMessage("This browser can't record an audio format we can check.");
+      return;
+    }
+
+    setSimilarity(null);
+    setMessage(null);
+    chunksRef.current = [];
+
+    const word = miscue.word;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType });
+
+      streamRef.current = stream;
+      recorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onerror = () => {
+        clearAutoStop();
+        stopMediaStreamTracks(streamRef.current);
+        streamRef.current = null;
+        recorderRef.current = null;
+        if (isMountedRef.current) {
+          setRecordingState("error");
+          setMessage("The microphone stopped unexpectedly. Please try again.");
+        }
+      };
+
+      recorder.onstop = () => {
+        void handleRecordingStopped(mimeType, word);
+      };
+
+      recorder.start();
+      setRecordingState("recording");
+
+      autoStopTimeoutRef.current = window.setTimeout(() => {
+        if (recorder.state === "recording") {
+          recorder.stop();
+        }
+      }, PRACTICE_AUTO_STOP_MS);
+    } catch (error) {
+      recorderRef.current = null;
+      setRecordingState("error");
+      setMessage(
+        error instanceof DOMException && error.name === "NotAllowedError"
+          ? "Microphone permission was blocked. Allow microphone access, then try again."
+          : "The microphone could not start. Please try again."
+      );
+    }
+  };
+
+  const stopRecording = () => {
+    clearAutoStop();
+    if (recorderRef.current?.state === "recording") {
+      recorderRef.current.stop();
+    }
+  };
+
+  const speak = (text: string) => {
+    if (typeof window === "undefined" || !window.speechSynthesis) {
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.5;
+    utterance.lang = "en-US";
+    window.speechSynthesis.speak(utterance);
+  };
 
   if (!miscue) {
     return (
@@ -605,6 +835,11 @@ function PracticeTab({
       </p>
     );
   }
+
+  const isRecording = recordingState === "recording";
+  const isChecking = recordingState === "checking";
+  const isExhausted = recordingState === "exhausted";
+  const attemptsRemaining = Math.max(MAX_PRACTICE_ATTEMPTS - attempts, 0);
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -619,32 +854,79 @@ function PracticeTab({
         </p>
       </div>
 
-      <p className="text-xs text-gray-400">
-        Expected:{" "}
-        {miscue.expectedPhonemes || "—"}
-      </p>
-
       <button
         type="button"
-        aria-label="Start recording"
-        onClick={() =>
-          setIsListening((prev) => !prev)
-        }
-        className="relative w-20 h-20 min-h-[48px] flex items-center justify-center"
+        onClick={() => speak(miscue.word)}
+        aria-label={`Hear correct pronunciation of ${miscue.word}`}
+        className="text-xs font-semibold text-[#008C9A] underline decoration-dotted"
       >
-        {isListening && (
-          <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping" />
-        )}
-
-        <span className="relative w-20 h-20 bg-red-500 rounded-full active:scale-95 transition flex items-center justify-center text-white">
-          🎤
-        </span>
+        🔊 Hear it first
       </button>
 
-      {isListening && (
+      {!isExhausted && recordingState !== "correct" ? (
+        <button
+          type="button"
+          aria-label={isRecording ? "Stop recording" : "Start recording"}
+          disabled={isChecking}
+          onClick={isRecording ? stopRecording : startRecording}
+          className="relative w-20 h-20 min-h-[48px] flex items-center justify-center disabled:opacity-50"
+        >
+          {isRecording && (
+            <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping" />
+          )}
+
+          <span className="relative w-20 h-20 bg-red-500 rounded-full active:scale-95 transition flex items-center justify-center text-white">
+            {isChecking ? "⏳" : "🎤"}
+          </span>
+        </button>
+      ) : null}
+
+      {isRecording && (
         <p className="text-sm text-gray-500">
-          Listening...
+          Listening... say the word now
         </p>
+      )}
+
+      {isChecking && (
+        <p className="text-sm text-gray-500">
+          Checking your pronunciation...
+        </p>
+      )}
+
+      {recordingState === "correct" && (
+        <div className="rounded-xl bg-green-50 px-4 py-3 text-center">
+          <p className="text-sm font-bold text-green-700">
+            Nice! You said it right! ✅
+          </p>
+          {similarity !== null && (
+            <p className="mt-1 text-xs text-green-600">
+              Match: {Math.round(similarity * 100)}%
+            </p>
+          )}
+        </div>
+      )}
+
+      {recordingState === "incorrect" && (
+        <div className="rounded-xl bg-amber-50 px-4 py-3 text-center">
+          <p className="text-sm font-bold text-amber-700">
+            Not quite — give it another try!
+          </p>
+          <p className="mt-1 text-xs text-amber-600">
+            {attemptsRemaining} {attemptsRemaining === 1 ? "try" : "tries"} left
+          </p>
+        </div>
+      )}
+
+      {isExhausted && (
+        <div className="rounded-xl bg-slate-100 px-4 py-3 text-center">
+          <p className="text-sm font-bold text-gray-700">
+            No worries — we&apos;ll practice this word again later!
+          </p>
+        </div>
+      )}
+
+      {recordingState === "error" && message && (
+        <p className="text-sm text-red-500 text-center">{message}</p>
       )}
     </div>
   );
