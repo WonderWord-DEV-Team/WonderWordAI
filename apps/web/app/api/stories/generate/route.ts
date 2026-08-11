@@ -196,10 +196,9 @@ export async function POST(request: NextRequest) {
   // the generate+validate loop below, since it only depends on `word`.
   const resolveImageTask = async (): Promise<string> => {
     try {
-      let imageUrl = await searchUnsplash(word);
-
+      let imageUrl = await generateDalleImage(word);
       if (!imageUrl) {
-        imageUrl = await generateDalleImage(word);
+        imageUrl = await searchUnsplash(word);
       }
 
       return imageUrl || "/images/placeholder.png";
@@ -237,7 +236,7 @@ export async function POST(request: NextRequest) {
         // ticket: surface pass/fail for each story generation attempt in server logs
         console.log(
           `[stories/generate] attempt ${attempt}/${MAX_GENERATION_ATTEMPTS} for word "${word}": FAILED ` +
-            `(could not produce valid story JSON -- ${mapped.code})`
+          `(could not produce valid story JSON -- ${mapped.code})`
         );
 
         // configuration/timeout problems won't be fixed by retrying -- bubble up now
@@ -247,7 +246,7 @@ export async function POST(request: NextRequest) {
 
         feedback = [
           "The previous response was not valid JSON in the required format. " +
-            "Return ONLY the JSON object with a single story_text field."
+          "Return ONLY the JSON object with a single story_text field."
         ];
         continue;
       }
@@ -265,8 +264,8 @@ export async function POST(request: NextRequest) {
       // ticket: surface pass/fail for each story generation attempt in server logs
       console.log(
         `[stories/generate] attempt ${attempt}/${MAX_GENERATION_ATTEMPTS} for word "${word}": ` +
-          `${validation.is_valid ? "PASSED" : "FAILED"}` +
-          (validation.errors.length ? ` (errors: ${validation.errors.join("; ")})` : "")
+        `${validation.is_valid ? "PASSED" : "FAILED"}` +
+        (validation.errors.length ? ` (errors: ${validation.errors.join("; ")})` : "")
       );
 
       if (validation.is_valid) {
@@ -291,7 +290,7 @@ export async function POST(request: NextRequest) {
     if (!finalStoryText) {
       console.log(
         `[stories/generate] word "${word}" strict generation failed after ${MAX_GENERATION_ATTEMPTS} attempt(s); ` +
-          `trying relaxed fallback generation.`
+        `trying relaxed fallback generation.`
       );
 
       for (let attempt = 1; attempt <= MAX_FALLBACK_ATTEMPTS; attempt += 1) {
@@ -326,7 +325,7 @@ export async function POST(request: NextRequest) {
 
         console.log(
           `[stories/generate] fallback attempt ${attempt}/${MAX_FALLBACK_ATTEMPTS} for word "${word}": ` +
-            `${passesNonVocabGuardrails ? "PASSED" : "FAILED"} (vocabulary check skipped)`
+          `${passesNonVocabGuardrails ? "PASSED" : "FAILED"} (vocabulary check skipped)`
         );
 
         if (passesNonVocabGuardrails) {
