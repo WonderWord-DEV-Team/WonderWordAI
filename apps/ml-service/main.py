@@ -15,6 +15,8 @@ from services.embedding_service import embedding_model
 from config import SENTRY_DSN  # ADDED
 from routers.themed_story import router as themed_story_router
 from routers.narrate import router as narrate_router
+from routers.detect_word_miscues import router as detect_word_miscues_router
+
 
 if SENTRY_DSN:
     import sentry_sdk
@@ -43,4 +45,5 @@ app.include_router(narrate_router)
 app.include_router(validate_story_router) 
 app.include_router(word_definition_router)
 app.include_router(themed_story_router)
+app.include_router(detect_word_miscues_router)
 
