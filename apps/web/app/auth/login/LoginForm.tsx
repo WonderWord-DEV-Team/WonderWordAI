@@ -4,6 +4,7 @@ import { useFormState, useFormStatus } from "react-dom";
 import { signInWithPassword } from "@/app/auth/actions";
 import { initialLoginState, type LoginActionState } from "@/app/auth/login/state";
 import { PasswordInput } from "@/components/auth/PasswordInput";
+import { Button } from "@/components/shared/Button";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -16,13 +17,9 @@ function SubmitButton() {
   const { pending } = useFormStatus();
 
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="w-full min-h-12 rounded-xl bg-red-400 px-5 text-base font-black text-white shadow-md transition hover:bg-red-500 disabled:cursor-wait disabled:bg-gray-300"
-    >
+    <Button type="submit" disabled={pending} className="w-full">
       {pending ? "Signing in..." : "Log In 🚀"}
-    </button>
+    </Button>
   );
 }
 
@@ -63,14 +60,15 @@ export function LoginForm({ initialError }: LoginFormProps) {
       <p className="mt-2 text-center text-sm text-gray-500">
         Log in to check on your child&apos;s progress.
       </p>
-      <button
+      <Button
         type="button"
+        variant="white"
         disabled={googleLoading}
         onClick={handleGoogleSignIn}
-        className="mt-6 w-full min-h-12 rounded-xl border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        className="mt-6 w-full"
       >
         {googleLoading ? "Connecting to Google..." : "Continue with Google"}
-      </button>
+      </Button>
 
       <div className="my-5 flex items-center gap-3">
         <div className="h-px flex-1 bg-gray-200" />
@@ -97,44 +95,27 @@ export function LoginForm({ initialError }: LoginFormProps) {
           />
         </div>
 
-        <div>
-          <div className="flex items-center justify-between">
-            <label htmlFor="password" className="text-sm font-bold text-gray-900">
-              Password
-            </label>
-            <a href="/auth/forgot-password" className="text-sm font-bold text-blue-500 hover:underline">
-              Forgot Password?
-            </a>
-          </div>
-          <div className="mt-2">
-            <PasswordInputBare />
-          </div>
+        <div className="grid gap-2">
+          <label htmlFor="password" className="text-sm font-bold text-gray-900">
+            Password
+          </label>
+          <PasswordInput
+            id="password"
+            name="password"
+            autoComplete="current-password"
+            required
+            placeholder="••••••••"
+          />
         </div>
 
         {state.message ? (
-          <p
-            role="alert"
-            aria-live="polite"
-            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-gray-800"
-          >
+          <p role="alert" aria-live="polite" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-gray-800">
             {state.message}
           </p>
         ) : null}
 
         <SubmitButton />
       </form>
-
-      <p className="mt-6 text-center text-sm text-gray-500">
-        Don&apos;t have an account?{" "}
-        <Link href="/onboarding/step-1" className="font-bold text-red-500 hover:underline">
-          Sign Up
-       </Link>
-      </p>
     </>
   );
-}
-
-// Inline bare password field (no label, since label is handled above for layout match)
-function PasswordInputBare() {
-  return <PasswordInput id="password" name="password" label="" autoComplete="current-password" />;
 }

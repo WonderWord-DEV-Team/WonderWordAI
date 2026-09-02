@@ -1,23 +1,20 @@
 "use client";
 
 import { useFormState, useFormStatus } from "react-dom";
-import { requestPasswordReset } from "@/app/auth/actions";
+import { requestPasswordReset } from "@/app/auth/forgot-password/actions";
 import {
   initialForgotPasswordState,
   type ForgotPasswordActionState,
 } from "@/app/auth/forgot-password/state";
+import { Button } from "@/components/shared/Button";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
 
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="w-full min-h-12 rounded-xl bg-red-400 px-5 text-base font-black text-white shadow-md transition hover:bg-red-500 disabled:cursor-wait disabled:bg-gray-300"
-    >
+    <Button type="submit" disabled={pending} className="w-full">
       {pending ? "Sending..." : "Send Reset Link ➤"}
-    </button>
+    </Button>
   );
 }
 
@@ -120,7 +117,7 @@ export function ForgotPasswordForm() {
         href="/auth/login"
         className="mt-4 block text-center text-sm font-bold text-red-500 hover:underline"
       >
-        ← Back to Log In
+        ← Back to Login
       </a>
     </>
   );
