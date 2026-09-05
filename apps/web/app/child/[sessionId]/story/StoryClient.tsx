@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { SiteHeader, type SiteNavItem } from "@/components/shared/SiteHeader";
 import { SiteFooter } from "@/components/shared/SiteFooter";
+import { recordActivityCompletion } from "@/app/child/activity-actions";
 import { HeaderUserBadge } from "@/components/shared/HeaderUserBadge";
 import { Button } from "@/components/shared/Button";
 
@@ -225,8 +226,16 @@ function ThemedStoryContent({ childName }: { childName: string }) {
     setIsSpeaking(false);
   };
 
-  const handleFinishStory = () => {
+  const handleFinishStory = async () => {
     stopSpeaking();
+    // Typing the story out in full is what "finishing" means here, so this is
+    // the point where the day's goal and the weekly challenge learn about it.
+    if (themeConfig) {
+      await recordActivityCompletion({
+        activityType: "themed_story",
+        theme: themeConfig.name.toLowerCase()
+      });
+    }
     router.push("/child");
   };
 
@@ -350,7 +359,7 @@ function ThemedStoryContent({ childName }: { childName: string }) {
                       setUserInput(val);
                       if (val === storyText) {
                         setTimeout(() => {
-                          handleFinishStory();
+                          void handleFinishStory();
                         }, 1000);
                       }
                     }
