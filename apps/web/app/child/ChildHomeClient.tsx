@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, ChevronDown, Flame, Mic } from "lucide-react";
+import { Camera, Check, ChevronDown, Flame, Mic } from "lucide-react";
 import { WorksheetCapture } from "@/components/worksheet/WorksheetCapture";
 import { useChildSession } from "@/components/child/ChildSessionContext";
 import { useCreateSession, useOpenSessions } from "@/hooks/useSessions";
@@ -14,6 +14,7 @@ import { SiteFooter } from "@/components/shared/SiteFooter";
 import { HeaderUserBadge } from "@/components/shared/HeaderUserBadge";
 import { Button } from "@/components/shared/Button";
 import type { ChildHomeDaily } from "@/lib/child/dailyContent";
+import { saveChildTimezone } from "./activity-actions";
 
 const HEADER_NAV_ITEMS: SiteNavItem[] = [
   { label: "Home", href: "#", active: true },
@@ -99,7 +100,7 @@ export function ChildHomeClient({
   daily: ChildHomeDaily;
 }) {
   const router = useRouter();
-  const { streakDays, goal, challenge, word } = daily;
+  const { streakDays, activeToday, goal, challenge, word } = daily;
   const [isSpeakingWord, setIsSpeakingWord] = useState(false);
   const {
     sessionId,
@@ -114,6 +115,16 @@ export function ChildHomeClient({
   const { mutateAsync: createSession } = useCreateSession();
   const sessionRequestRef = useRef<Promise<string> | null>(null);
   const storyWorldsRef = useRef<HTMLElement>(null);
+  const worksheetRef = useRef<HTMLElement>(null);
+
+  // The server needs the child's own zone to know when their day rolls over;
+  // otherwise streaks reset at UTC midnight, which is mid-evening in Brazil.
+  useEffect(() => {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (timeZone) {
+      void saveChildTimezone(timeZone);
+    }
+  }, []);
 
   useEffect(() => {
     if (childId) return;
@@ -163,18 +174,23 @@ export function ChildHomeClient({
   };
 
   const handleStartChallenge = async () => {
-    if (challenge.storyTheme) {
-      await handleStartStoryWorld(challenge.storyTheme);
+    if (challenge.targetType === "read_aloud") {
+      router.push("/read-aloud");
+      return;
+    }
+
+    if (challenge.targetType === "worksheet") {
+      worksheetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+
+    if (challenge.targetTheme) {
+      await handleStartStoryWorld(challenge.targetTheme);
       return;
     }
 
     // "Any world" challenges stay on this page — send the child to the picker.
-    if (challenge.ctaHref === "/child") {
-      storyWorldsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-
-    router.push(challenge.ctaHref);
+    storyWorldsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   // Word of the Day is read out by the browser itself — no narration API call.
@@ -253,23 +269,29 @@ export function ChildHomeClient({
             <Flame className="size-8" />
             <div>
               <h2 className="text-lg font-black">
-                {streakDays === 1
-                  ? "Day 1 — your streak starts today!"
-                  : `${streakDays}-Day Streak — Keep it going!`}
+                {streakDays === 0
+                  ? "Start your streak today!"
+                  : streakDays === 1
+                    ? "Day 1 — your streak has begun!"
+                    : `${streakDays}-Day Streak — Keep it going!`}
               </h2>
               <p className="mt-1 text-sm font-semibold text-white/90">
                 {goal.completedCount >= goal.targetCount
                   ? "You hit today's goal! Come back tomorrow to grow your streak."
-                  : `You're on fire! ${goal.targetCount - goal.completedCount} more ${
-                      goal.targetCount - goal.completedCount === 1 ? "activity" : "activities"
-                    } to hit today's goal.`}
+                  : streakDays > 0 && !activeToday
+                    ? `Finish ${goal.targetCount} ${
+                        goal.targetCount === 1 ? "activity" : "activities"
+                      } today to keep your streak alive.`
+                    : `${goal.targetCount - goal.completedCount} more ${
+                        goal.targetCount - goal.completedCount === 1 ? "activity" : "activities"
+                      } to hit today's goal.`}
               </p>
             </div>
           </div>
         </section>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-          <section className="rounded-2xl border border-[#f0e6d8] bg-white p-6 shadow-sm">
+          <section ref={worksheetRef} className="scroll-mt-24 rounded-2xl border border-[#f0e6d8] bg-white p-6 shadow-sm">
             <div className="flex flex-col items-center gap-2 text-center">
               <div className="grid size-14 place-items-center rounded-full bg-[#a3352b]/10 text-[#a3352b]">
                 <Camera className="size-7" />
@@ -324,22 +346,56 @@ export function ChildHomeClient({
             <section className="relative rounded-2xl bg-amber-50 p-6">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-sm font-black text-[#2b2b2b]">Weekly Challenge</h3>
-                <span className="rounded-full bg-amber-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-amber-900">
-                  {challenge.xpReward} XP
-                </span>
+                {challenge.isComplete ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-emerald-900">
+                    <Check className="size-3" />
+                    Done
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-amber-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-amber-900">
+                    {challenge.completedCount} / {challenge.targetCount}
+                  </span>
+                )}
               </div>
               <p className="mt-1 text-sm font-black text-[#2b2b2b]">{challenge.title}</p>
               <p className="mt-1 text-sm leading-6 text-[#5a5a5a]">{challenge.description}</p>
-              <Button
-                type="button"
-                onClick={handleStartChallenge}
-                variant="sunset"
-                size="sm"
-                fullWidth
-                className="mt-4"
+
+              <div
+                role="progressbar"
+                aria-label={`Weekly challenge: ${challenge.title}`}
+                aria-valuenow={challenge.completedCount}
+                aria-valuemin={0}
+                aria-valuemax={challenge.targetCount}
+                className="mt-3 h-2 w-full overflow-hidden rounded-full bg-amber-200/70"
               >
-                {challenge.ctaLabel} →
-              </Button>
+                <div
+                  className={`h-full rounded-full transition-[width] ${
+                    challenge.isComplete ? "bg-emerald-500" : "bg-amber-500"
+                  }`}
+                  style={{
+                    width: `${Math.round(
+                      (challenge.completedCount / challenge.targetCount) * 100
+                    )}%`
+                  }}
+                />
+              </div>
+
+              {challenge.isComplete ? (
+                <p className="mt-4 text-center text-sm font-black text-emerald-700">
+                  Challenge complete — nice work! 🎉
+                </p>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={handleStartChallenge}
+                  variant="sunset"
+                  size="sm"
+                  fullWidth
+                  className="mt-4"
+                >
+                  {challenge.completedCount > 0 ? "Keep going!" : "Try it!"} →
+                </Button>
+              )}
             </section>
           </div>
         </div>

@@ -14,6 +14,7 @@ import type { AuthContext } from "@/lib/auth/types";
 import { normalizeKaraokeWord, type KaraokeTimeline } from "@/lib/karaoke/timeline";
 import type { SessionAudioData, SessionAudioMiscue } from "@/lib/audio/schema";
 import { Button } from "@/components/shared/Button";
+import { recordActivityCompletion } from "@/app/child/activity-actions";
 
 type ChildReadingShellProps = {
   auth: AuthContext;
@@ -103,6 +104,10 @@ export function ChildReadingShell({ auth, childName, routeSessionId }: ChildRead
     setLatestTranscription(result);
     setSessionMiscues(result.miscues);
     setHasResults(true);
+
+    // A completed reading pass over the worksheet is the activity finishing —
+    // this is what Today's Goal and the weekly challenge count.
+    void recordActivityCompletion({ activityType: "worksheet" });
   };
 
   // Called from the Practice tab (via CorrectionModal) when the child

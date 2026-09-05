@@ -71,18 +71,43 @@ Every migration that touches RLS should include or update database tests under `
 
 The Child Home (`/child`) cards Day Streak, Today's Goal, Weekly Challenge and Word of the Day are database-backed. No external API is involved.
 
-| Table | Rows | Key | Purpose |
-| --- | --- | --- | --- |
-| `public.daily_goals` | 366 | `day_of_year` (1-366) | One goal per calendar day, seeded from a 40-goal rotation. |
-| `public.weekly_challenges` | 53 | `week_of_year` (1-53) | One challenge per ISO week, each with an XP reward and a CTA target. |
-| `public.words_of_the_day` | 366 | `day_of_year` (1-366) | One distinct word per calendar day, with definition and example sentence. |
-| `public.child_daily_activity` | per child/day | `(child_id, activity_date)` | Login-day ledger that backs the streak. |
+### Content (static, one row per calendar slot)
 
-Selection is deterministic: `lib/child/dailyContent.ts` reads the row whose `day_of_year` matches `EXTRACT(DOY FROM CURRENT_DATE)` and whose `week_of_year` matches the current ISO week, so each login day shows the next goal, word and (weekly) challenge.
+| Table | Rows | Key |
+| --- | --- | --- |
+| `public.daily_goals` | 366 | `day_of_year` (1-366) |
+| `public.weekly_challenges` | 53 | `week_of_year` (1-53) |
+| `public.words_of_the_day` | 366 | `day_of_year` (1-366) |
 
-`child_daily_activity` is upserted with the service role when the child opens the home page; children and their linked parent can read it, nobody else writes it. Today's Goal progress is derived at read time from `reading_sessions.start_time` and `generated_stories.generated_at` for the current day, so no extra counters need to stay in sync.
+Selection is deterministic: `lib/child/dailyContent.ts` reads the row whose `day_of_year` matches the child's local day-of-year and whose `week_of_year` matches the current ISO week, so each day surfaces the next goal, word and challenge.
 
-Content lives in migrations, so `npx supabase db reset` reseeds it. Re-running the seed migrations is safe: every insert ends with `ON CONFLICT ... DO NOTHING`.
+### Progress (`public.child_activity_events`)
+
+One row per activity a child actually **finished**. Written only by the server, from `app/child/activity-actions.ts`, at the point each flow completes:
+
+| `activity_type` | Written when |
+| --- | --- |
+| `themed_story` | the child types the generated story out in full (`handleFinishStory`) |
+| `read_aloud` | the child presses Finish in the read-aloud flow |
+| `worksheet` | a reading pass over a scanned worksheet is transcribed |
+
+Progress is **not** inferred from `reading_sessions` or `generated_stories`. An earlier version did, and it was wrong: `reading_sessions` is created when an activity *starts* and is then reused for the whole visit, and nothing in the child-facing flows writes `generated_stories` at all, because the story world calls `/api/themed-stories/generate`, which persists nothing.
+
+- **Day Streak** — consecutive `local_date` values with at least one event. A day with nothing done yet keeps yesterday's streak; it breaks only once a full day passes empty.
+- **Today's Goal** — events on today's `local_date`, against `daily_goals.target_count`.
+- **Weekly Challenge** — events in the current ISO week matching `target_type` and, for story challenges, `target_theme`.
+
+### Challenges must be achievable
+
+`weekly_challenges` carries structured criteria (`target_type`, `target_theme`, `target_count`), not just prose, so progress can be evaluated. A `CHECK` restricts `target_type` to activity types that are actually recorded. Do not add a challenge for Word Explorer or Word Vision until those flows emit completion events — a challenge nothing can satisfy is worse than no challenge.
+
+There is deliberately **no XP**. The first version promised "earn 50 XP" on every card while no XP balance existed anywhere in the schema, so the app could not pay what it advertised to a child. Reintroduce the reward only alongside somewhere to store it.
+
+### The child's own day
+
+Streaks and daily goals roll over at the child's local midnight, not UTC's (which is 21:00 in Brazil, 16:00 US Pacific). The browser reports its IANA zone into `child_profiles.timezone` on first load; the server uses it to resolve "today", and falls back to `UTC` when it is unset.
+
+Content lives in migrations, so `npx supabase db reset` reseeds it.
 
 Run its database tests from the repository root:
 

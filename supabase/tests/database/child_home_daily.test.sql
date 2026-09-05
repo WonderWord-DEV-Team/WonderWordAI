@@ -5,10 +5,10 @@ SET search_path = public, extensions;
 
 GRANT USAGE ON SCHEMA extensions TO authenticated, anon, supabase_auth_admin;
 
-SELECT plan(11);
+SELECT plan(13);
 
 TRUNCATE TABLE
-    public.child_daily_activity,
+    public.child_activity_events,
     public.story_interactions,
     public.generated_reports,
     public.generated_stories,
@@ -57,62 +57,44 @@ SELECT isnt_empty(
 );
 
 -- ---------------------------------------------------------------------------
+-- Every challenge must be achievable
+-- ---------------------------------------------------------------------------
+-- A challenge that asks for an activity the app never records can never be
+-- completed. The first version shipped 15 of those (Word Explorer / Word
+-- Vision), which is how a child could do the work and see no progress.
+
+SELECT is(
+    (SELECT COUNT(*)::INTEGER FROM public.weekly_challenges
+      WHERE target_type NOT IN ('themed_story', 'read_aloud', 'worksheet')),
+    0,
+    'no challenge targets an activity type that is never recorded'
+);
+
+SELECT is(
+    (SELECT COUNT(*)::INTEGER FROM public.weekly_challenges
+      WHERE target_theme IS NOT NULL AND target_type <> 'themed_story'),
+    0,
+    'only story challenges pin a story world'
+);
+
+-- ---------------------------------------------------------------------------
 -- Fixtures
 -- ---------------------------------------------------------------------------
 
 INSERT INTO auth.users (
-    id,
-    instance_id,
-    aud,
-    role,
-    email,
-    encrypted_password,
-    email_confirmed_at,
-    raw_app_meta_data,
-    raw_user_meta_data,
-    created_at,
-    updated_at
+    id, instance_id, aud, role, email, encrypted_password,
+    email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
 )
 VALUES
-    (
-        '00000000-0000-0000-0000-000000000101',
-        '00000000-0000-0000-0000-000000000000',
-        'authenticated',
-        'authenticated',
-        'child-one@example.test',
-        'not-used',
-        NOW(),
-        '{"provider":"email","providers":["email"]}',
-        '{}',
-        NOW(),
-        NOW()
-    ),
-    (
-        '00000000-0000-0000-0000-000000000102',
-        '00000000-0000-0000-0000-000000000000',
-        'authenticated',
-        'authenticated',
-        'child-two@example.test',
-        'not-used',
-        NOW(),
-        '{"provider":"email","providers":["email"]}',
-        '{}',
-        NOW(),
-        NOW()
-    ),
-    (
-        '00000000-0000-0000-0000-000000000201',
-        '00000000-0000-0000-0000-000000000000',
-        'authenticated',
-        'authenticated',
-        'parent-linked@example.test',
-        'not-used',
-        NOW(),
-        '{"provider":"email","providers":["email"]}',
-        '{}',
-        NOW(),
-        NOW()
-    );
+    ('00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000000',
+     'authenticated', 'authenticated', 'child-one@example.test', 'not-used', NOW(),
+     '{"provider":"email","providers":["email"]}', '{}', NOW(), NOW()),
+    ('00000000-0000-0000-0000-000000000102', '00000000-0000-0000-0000-000000000000',
+     'authenticated', 'authenticated', 'child-two@example.test', 'not-used', NOW(),
+     '{"provider":"email","providers":["email"]}', '{}', NOW(), NOW()),
+    ('00000000-0000-0000-0000-000000000201', '00000000-0000-0000-0000-000000000000',
+     'authenticated', 'authenticated', 'parent-linked@example.test', 'not-used', NOW(),
+     '{"provider":"email","providers":["email"]}', '{}', NOW(), NOW());
 
 INSERT INTO public.users (id, auth_id, email, role)
 VALUES
@@ -120,21 +102,21 @@ VALUES
     ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000102', 'child-two@example.test', 'CHILD'),
     ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000201', 'parent-linked@example.test', 'PARENT');
 
-INSERT INTO public.child_profiles (id, child_id, name, grade)
+INSERT INTO public.child_profiles (id, child_id, name, grade, timezone)
 VALUES
-    ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'Child One', 2),
-    ('30000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'Child Two', 3);
+    ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'Child One', 2, 'America/Sao_Paulo'),
+    ('30000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'Child Two', 3, NULL);
 
 INSERT INTO public.parent_child (parent_id, child_id)
 VALUES ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001');
 
--- A three-day streak for child one, one unrelated day for child two.
-INSERT INTO public.child_daily_activity (child_id, activity_date)
+-- Three days of activity for child one, one unrelated day for child two.
+INSERT INTO public.child_activity_events (child_id, activity_type, theme, local_date)
 VALUES
-    ('10000000-0000-0000-0000-000000000001', CURRENT_DATE),
-    ('10000000-0000-0000-0000-000000000001', CURRENT_DATE - 1),
-    ('10000000-0000-0000-0000-000000000001', CURRENT_DATE - 2),
-    ('10000000-0000-0000-0000-000000000002', CURRENT_DATE);
+    ('10000000-0000-0000-0000-000000000001', 'themed_story', 'food',  CURRENT_DATE),
+    ('10000000-0000-0000-0000-000000000001', 'read_aloud',   NULL,    CURRENT_DATE - 1),
+    ('10000000-0000-0000-0000-000000000001', 'worksheet',    NULL,    CURRENT_DATE - 2),
+    ('10000000-0000-0000-0000-000000000002', 'themed_story', 'space', CURRENT_DATE);
 
 -- ---------------------------------------------------------------------------
 -- Child access
@@ -145,9 +127,9 @@ SELECT set_config('request.jwt.claim.role', 'authenticated', true);
 SET LOCAL ROLE authenticated;
 
 SELECT is(
-    (SELECT COUNT(*)::INTEGER FROM public.child_daily_activity),
+    (SELECT COUNT(*)::INTEGER FROM public.child_activity_events),
     3,
-    'child reads own activity days and not another child days'
+    'child reads own activity events and not another child events'
 );
 
 SELECT is(
@@ -169,11 +151,11 @@ SELECT is(
 );
 
 SELECT throws_ok(
-    $$INSERT INTO public.child_daily_activity (child_id, activity_date)
-      VALUES ('10000000-0000-0000-0000-000000000001', CURRENT_DATE - 5)$$,
+    $$INSERT INTO public.child_activity_events (child_id, activity_type, local_date)
+      VALUES ('10000000-0000-0000-0000-000000000001', 'read_aloud', CURRENT_DATE - 5)$$,
     '42501',
-    'permission denied for table child_daily_activity',
-    'child cannot write its own activity ledger; only the service role does'
+    'permission denied for table child_activity_events',
+    'child cannot forge its own completions; only the service role writes them'
 );
 
 RESET ROLE;
@@ -187,9 +169,9 @@ SELECT set_config('request.jwt.claim.role', 'authenticated', true);
 SET LOCAL ROLE authenticated;
 
 SELECT is(
-    (SELECT COUNT(*)::INTEGER FROM public.child_daily_activity),
+    (SELECT COUNT(*)::INTEGER FROM public.child_activity_events),
     3,
-    'linked parent reads the linked child activity days'
+    'linked parent reads the linked child activity events'
 );
 
 RESET ROLE;

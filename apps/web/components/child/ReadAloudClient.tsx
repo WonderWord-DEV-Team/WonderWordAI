@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { LogOut, Mic, Square, Volume2, RotateCcw, Check } from "lucide-react";
 import { chooseSupportedRecordingMimeType, stopMediaStreamTracks } from "@/lib/karaoke/timeline";
 import { Button } from "@/components/shared/Button";
+import { recordActivityCompletion } from "@/app/child/activity-actions";
 
 // The mascot has no canonical name anywhere in the codebase yet -- the mockup
 // just says "[monster name]". Kept as a single constant so renaming it later
@@ -397,6 +398,14 @@ export function ReadAloudClient({ childName }: ReadAloudClientProps) {
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
   };
 
+  // Both Finish buttons land here. "Exhausted" counts too: the child worked
+  // through all their attempts, and a reading app should not withhold credit
+  // from the reader who struggled most.
+  const handleFinish = async () => {
+    await recordActivityCompletion({ activityType: "read_aloud" });
+    router.push("/child");
+  };
+
   const resetAttempt = () => {
     setState("idle");
     setMessage(null);
@@ -563,7 +572,7 @@ export function ReadAloudClient({ childName }: ReadAloudClientProps) {
                   </Button>
                   <Button
                     type="button"
-                    onClick={() => router.push("/child")}
+                    onClick={() => void handleFinish()}
                     variant="rose"
                     size="lg"
                   >
@@ -586,7 +595,7 @@ export function ReadAloudClient({ childName }: ReadAloudClientProps) {
                   {state === "exhausted" ? (
                     <Button
                       type="button"
-                      onClick={() => router.push("/child")}
+                      onClick={() => void handleFinish()}
                       variant="rose"
                       size="lg"
                     >
