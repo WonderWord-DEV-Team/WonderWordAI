@@ -13,6 +13,7 @@ import { SiteHeader, type SiteNavItem } from "@/components/shared/SiteHeader";
 import { SiteFooter } from "@/components/shared/SiteFooter";
 import { HeaderUserBadge } from "@/components/shared/HeaderUserBadge";
 import { Button } from "@/components/shared/Button";
+import type { ChildHomeDaily } from "@/lib/child/dailyContent";
 
 const HEADER_NAV_ITEMS: SiteNavItem[] = [
   { label: "Home", href: "#", active: true },
@@ -90,12 +91,16 @@ type Sibling = { child_id: string; name: string };
 
 export function ChildHomeClient({
   childName,
-  siblings
+  siblings,
+  daily
 }: {
   childName: string;
   siblings: Sibling[];
+  daily: ChildHomeDaily;
 }) {
   const router = useRouter();
+  const { streakDays, goal, challenge, word } = daily;
+  const [isSpeakingWord, setIsSpeakingWord] = useState(false);
   const {
     sessionId,
     setSessionId,
@@ -108,6 +113,7 @@ export function ChildHomeClient({
   const { data: openSessions } = useOpenSessions();
   const { mutateAsync: createSession } = useCreateSession();
   const sessionRequestRef = useRef<Promise<string> | null>(null);
+  const storyWorldsRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (childId) return;
@@ -156,6 +162,50 @@ export function ChildHomeClient({
     router.push(`/child/${id}/story?theme=${theme.toLowerCase()}`);
   };
 
+  const handleStartChallenge = async () => {
+    if (challenge.storyTheme) {
+      await handleStartStoryWorld(challenge.storyTheme);
+      return;
+    }
+
+    // "Any world" challenges stay on this page — send the child to the picker.
+    if (challenge.ctaHref === "/child") {
+      storyWorldsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    router.push(challenge.ctaHref);
+  };
+
+  // Word of the Day is read out by the browser itself — no narration API call.
+  const handleSpeakWord = () => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    window.speechSynthesis.cancel();
+
+    if (isSpeakingWord) {
+      setIsSpeakingWord(false);
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(`${word.word}. ${word.definition}`);
+    utterance.rate = 0.85; // slower pace for young readers
+    utterance.lang = "en-US";
+    utterance.onend = () => setIsSpeakingWord(false);
+    utterance.onerror = () => setIsSpeakingWord(false);
+
+    setIsSpeakingWord(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
   const handleBackToParent = async () => {
     const result = await switchToParent();
     if (result.success) {
@@ -199,15 +249,20 @@ export function ChildHomeClient({
 
       <main className="mx-auto max-w-6xl 2xl:max-w-[1500px] min-[1800px]:max-w-[1700px] px-6 py-8">
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#ff9d4d] to-[#ff6b35] p-6 text-white shadow-sm">
-          <div className="absolute right-4 top-4">
-            <ComingSoonBadge />
-          </div>
           <div className="flex items-center gap-4">
             <Flame className="size-8" />
             <div>
-              <h2 className="text-lg font-black">5-Day Streak — Keep it going!</h2>
+              <h2 className="text-lg font-black">
+                {streakDays === 1
+                  ? "Day 1 — your streak starts today!"
+                  : `${streakDays}-Day Streak — Keep it going!`}
+              </h2>
               <p className="mt-1 text-sm font-semibold text-white/90">
-                You&apos;re on fire! Read for 10 more minutes to hit your goal.
+                {goal.completedCount >= goal.targetCount
+                  ? "You hit today's goal! Come back tomorrow to grow your streak."
+                  : `You're on fire! ${goal.targetCount - goal.completedCount} more ${
+                      goal.targetCount - goal.completedCount === 1 ? "activity" : "activities"
+                    } to hit today's goal.`}
               </p>
             </div>
           </div>
@@ -237,51 +292,84 @@ export function ChildHomeClient({
 
           <div className="grid gap-6">
             <section className="relative rounded-2xl bg-[#e6f5f1] p-6">
-              <div className="absolute right-4 top-4">
-                <ComingSoonBadge />
-              </div>
               <h3 className="text-sm font-black text-[#2b2b2b]">Today&apos;s Goal</h3>
-              <p className="text-xs text-[#5a5a5a]">3 of 5 pages read</p>
+              <p className="text-xs text-[#5a5a5a]">
+                {goal.completedCount} of {goal.targetCount} {goal.unit} done
+              </p>
               <div className="mt-4 grid place-items-center">
-                <div className="grid size-24 place-items-center rounded-full border-8 border-[#1f9c86]/30 text-2xl font-black text-[#1f9c86]">
-                  68%
+                <div
+                  role="progressbar"
+                  aria-label={`Today's goal: ${goal.title}`}
+                  aria-valuenow={goal.percent}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  className="grid size-24 place-items-center rounded-full"
+                  style={{
+                    background: `conic-gradient(#1f9c86 ${goal.percent * 3.6}deg, rgba(31, 156, 134, 0.2) 0deg)`
+                  }}
+                >
+                  <div className="grid size-[72px] place-items-center rounded-full bg-[#e6f5f1] text-2xl font-black text-[#1f9c86]">
+                    {goal.percent}%
+                  </div>
                 </div>
               </div>
+              <p className="mt-4 text-center text-xs font-black text-[#2b2b2b]">
+                {goal.emoji} {goal.title}
+              </p>
+              <p className="mt-1 text-center text-xs leading-5 text-[#5a5a5a]">
+                {goal.description}
+              </p>
             </section>
 
             <section className="relative rounded-2xl bg-amber-50 p-6">
-              <div className="absolute right-4 top-4">
-                <ComingSoonBadge />
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-black text-[#2b2b2b]">Weekly Challenge</h3>
+                <span className="rounded-full bg-amber-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-amber-900">
+                  {challenge.xpReward} XP
+                </span>
               </div>
-              <h3 className="text-sm font-black text-[#2b2b2b]">Weekly Challenge</h3>
-              <p className="mt-1 text-sm leading-6 text-[#5a5a5a]">
-                Read 1 Space story without getting stuck — earn 50 XP!
-              </p>
-              <button
+              <p className="mt-1 text-sm font-black text-[#2b2b2b]">{challenge.title}</p>
+              <p className="mt-1 text-sm leading-6 text-[#5a5a5a]">{challenge.description}</p>
+              <Button
                 type="button"
-                disabled
-                className="mt-4 w-full cursor-not-allowed rounded-full bg-amber-300/60 py-2 text-sm font-black text-white"
+                onClick={handleStartChallenge}
+                variant="sunset"
+                size="sm"
+                fullWidth
+                className="mt-4"
               >
-                Try it! →
-              </button>
+                {challenge.ctaLabel} →
+              </Button>
             </section>
           </div>
         </div>
 
         <section className="relative mt-6 flex items-center justify-between gap-4 rounded-2xl bg-[#e6f5f1] p-6">
-          <div className="absolute right-4 top-4">
-            <ComingSoonBadge />
-          </div>
           <div>
             <p className="text-xs font-black uppercase tracking-[0.12em] text-[#1f9c86]">Word of the day</p>
-            <p className="mt-1 text-3xl font-black text-[#2b2b2b]">Curious</p>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-[#5a5a5a]">
-              Feeling curious means you want to learn more or know about something!
+            <p className="mt-1 text-3xl font-black text-[#2b2b2b]">
+              {word.word}
+              {word.partOfSpeech ? (
+                <span className="ml-2 align-middle text-sm font-semibold italic text-[#5a5a5a]">
+                  {word.partOfSpeech}
+                </span>
+              ) : null}
+            </p>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-[#5a5a5a]">{word.definition}</p>
+            <p className="mt-1 max-w-xl text-sm italic leading-6 text-[#5a5a5a]">
+              &ldquo;{word.exampleSentence}&rdquo;
             </p>
           </div>
-          <div className="grid size-12 shrink-0 place-items-center rounded-full bg-[#1f9c86] text-white">
+          <button
+            type="button"
+            onClick={handleSpeakWord}
+            aria-label={isSpeakingWord ? `Stop reading ${word.word}` : `Hear ${word.word}`}
+            className={`grid size-12 shrink-0 place-items-center rounded-full text-white transition hover:scale-105 active:scale-95 ${
+              isSpeakingWord ? "bg-[#a3352b]" : "bg-[#1f9c86]"
+            }`}
+          >
             <Mic className="size-5" />
-          </div>
+          </button>
         </section>
 
         <section className="mt-8">
@@ -322,7 +410,7 @@ export function ChildHomeClient({
           </div>
         </section>
 
-        <section className="mt-8">
+        <section ref={storyWorldsRef} className="mt-8 scroll-mt-24">
           <h2 className="text-sm font-black uppercase tracking-[0.1em] text-[#8a8a8a]">
             Pick a story world
           </h2>

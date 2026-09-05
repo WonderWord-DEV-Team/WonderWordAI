@@ -67,6 +67,30 @@ Create a timestamped migration under `supabase/migrations/`, keep application ob
 
 Every migration that touches RLS should include or update database tests under `supabase/tests/database/`.
 
+## Child Home Daily Cards
+
+The Child Home (`/child`) cards Day Streak, Today's Goal, Weekly Challenge and Word of the Day are database-backed. No external API is involved.
+
+| Table | Rows | Key | Purpose |
+| --- | --- | --- | --- |
+| `public.daily_goals` | 366 | `day_of_year` (1-366) | One goal per calendar day, seeded from a 40-goal rotation. |
+| `public.weekly_challenges` | 53 | `week_of_year` (1-53) | One challenge per ISO week, each with an XP reward and a CTA target. |
+| `public.words_of_the_day` | 366 | `day_of_year` (1-366) | One distinct word per calendar day, with definition and example sentence. |
+| `public.child_daily_activity` | per child/day | `(child_id, activity_date)` | Login-day ledger that backs the streak. |
+
+Selection is deterministic: `lib/child/dailyContent.ts` reads the row whose `day_of_year` matches `EXTRACT(DOY FROM CURRENT_DATE)` and whose `week_of_year` matches the current ISO week, so each login day shows the next goal, word and (weekly) challenge.
+
+`child_daily_activity` is upserted with the service role when the child opens the home page; children and their linked parent can read it, nobody else writes it. Today's Goal progress is derived at read time from `reading_sessions.start_time` and `generated_stories.generated_at` for the current day, so no extra counters need to stay in sync.
+
+Content lives in migrations, so `npx supabase db reset` reseeds it. Re-running the seed migrations is safe: every insert ends with `ON CONFLICT ... DO NOTHING`.
+
+Run its database tests from the repository root:
+
+```sh
+npx supabase db reset
+npx supabase test db supabase/tests/database/child_home_daily.test.sql
+```
+
 ## Child Known Words Refresh
 
 `public.child_known_words` is a derived personalized vocabulary cache. Its only source of truth is persisted `public.reading_events`; Dolch or other fallback vocabulary must stay outside this table and may only be merged in memory by application services that need a minimum vocabulary size.

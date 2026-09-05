@@ -8,6 +8,7 @@ import {
 } from "@/lib/e2e/fixtures";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fallbackChildHomeDaily, getChildHomeDaily } from "@/lib/child/dailyContent";
 import { ChildHomeClient } from "./ChildHomeClient";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ export default async function ChildHomePage() {
       <ChildHomeClient
         childName={profile?.name ?? "Reader"}
         siblings={getE2eSiblingProfiles(auth.appUser.id)}
+        daily={fallbackChildHomeDaily()}
       />
     );
   }
@@ -82,5 +84,13 @@ export default async function ChildHomePage() {
     }
   }
 
-  return <ChildHomeClient childName={profile?.name ?? "Reader"} siblings={siblings} />;
+  const daily = await getChildHomeDaily(childUser.id);
+
+  return (
+    <ChildHomeClient
+      childName={profile?.name ?? "Reader"}
+      siblings={siblings}
+      daily={daily}
+    />
+  );
 }
