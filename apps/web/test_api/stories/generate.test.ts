@@ -34,6 +34,10 @@ const mockMaybeSingleUser = vi.fn().mockResolvedValue({
   error: null
 });
 
+const mockStorageList = vi.fn();
+const mockStorageUpload = vi.fn();
+const mockStorageGetPublicUrl = vi.fn();
+
 const mockSupabase = {
   auth: {
     getUser: vi.fn().mockResolvedValue({
@@ -60,13 +64,27 @@ const mockSupabase = {
         })
       };
     }
+    if (table === "curriculum_words") {
+      return {
+        select: () => ({
+          in: () => Promise.resolve({ data: [], error: null })
+        })
+      };
+    }
     if (table === "generated_stories") {
       return {
         insert: mockInsert
       };
     }
     return {};
-  })
+  }),
+  storage: {
+    from: () => ({
+      list: mockStorageList,
+      upload: mockStorageUpload,
+      getPublicUrl: mockStorageGetPublicUrl
+    })
+  }
 };
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -137,24 +155,22 @@ describe("Story Image Pipeline Integration Tests (/api/stories/generate)", () =>
     process.env.ANTHROPIC_API_KEY = "test_anthropic_key";
     process.env.UNSPLASH_ACCESS_KEY = "test_unsplash_key";
     process.env.OPENAI_API_KEY = "test_openai_key";
+    mockOpenaiGenerate.mockResolvedValue({
+      data: [{ b64_json: "mocked_base64_data_dalle_image" }]
+    });
+    mockStorageList.mockResolvedValue({ data: [], error: null });
+    mockStorageUpload.mockResolvedValue({ data: {}, error: null });
+    mockStorageGetPublicUrl.mockImplementation((fileName: string) => ({
+      data: { publicUrl: `https://supabase/illustrations/${fileName}` }
+    }));
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("should resolve to Unsplash image, insert it into DB and return it (< 500ms latency requirement)", async () => {
-    // Mock successful Unsplash API fetch response
-    const mockUnsplashUrl = "https://images.unsplash.com/mock-shark.jpg";
-    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(() =>
-      Promise.resolve({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            results: [{ id: "unsplash-id-123", urls: { regular: mockUnsplashUrl } }]
-          })
-      } as any)
-    );
+  it("should resolve to a DALL-E image, insert it into DB and return it", async () => {
+    const mockDalleUrl = "https://supabase/illustrations/shark.png";
 
     mockSingle.mockResolvedValue({
       data: {
@@ -162,7 +178,7 @@ describe("Story Image Pipeline Integration Tests (/api/stories/generate)", () =>
         child_id: VALID_CHILD_ID,
         word: "shark",
         story_text: "Once upon a time, a shark swam in the deep blue sea.",
-        image_url: mockUnsplashUrl,
+        image_url: mockDalleUrl,
         validation_score: 95,
         phonics_category: "sh"
       },
@@ -181,76 +197,45 @@ describe("Story Image Pipeline Integration Tests (/api/stories/generate)", () =>
       body: JSON.stringify(body)
     });
 
-    // Measure latency for Unsplash hit integration
-    const start = performance.now();
     const res = await POST(req);
-    const end = performance.now();
-    const duration = end - start;
 
     expect(res.status).toBe(200);
     const resJson = await res.json();
 
-    // Verify it resolved via Unsplash
-    expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining("unsplash.com/search/photos"),
+    expect(mockOpenaiGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gpt-image-2"
+      }),
+      expect.any(Object)
+    );
+    expect(mockStorageUpload).toHaveBeenCalledWith(
+      "shark.png",
+      expect.any(Buffer),
       expect.any(Object)
     );
 
-    // Verify the URL was wired and saved
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        image_url: mockUnsplashUrl
+        image_url: mockDalleUrl
       })
     );
 
-    expect(resJson.data.image_url).toBe(mockUnsplashUrl);
-
-    // Assert latency constraint: <500ms for Unsplash hits
-    expect(duration).toBeLessThan(500);
+    expect(resJson.data.image_url).toBe(mockDalleUrl);
   });
 
-  it("should fallback to DALL-E when Unsplash returns no results", async () => {
-    // Unsplash returns no results
+  it("should fallback to Unsplash when DALL-E returns no image", async () => {
+    const mockUnsplashUrl = "https://images.unsplash.com/mock-dinosaur.jpg";
+    mockOpenaiGenerate.mockResolvedValueOnce({ data: [] });
+
     const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(() =>
       Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ results: [] })
+        json: () =>
+          Promise.resolve({
+            results: [{ id: "unsplash-id-124", urls: { regular: mockUnsplashUrl } }]
+          })
       } as any)
     );
-
-    // Mock storage cache miss (list returns empty array)
-    // To mock the storage functions called inside generateDalleImage, we mock mockSupabase's storage
-    const mockStorageList = vi.fn().mockResolvedValue({ data: [], error: null });
-    const mockStorageUpload = vi.fn().mockResolvedValue({ data: {}, error: null });
-    const mockStorageGetPublicUrl = vi.fn().mockReturnValue({
-      data: { publicUrl: "https://supabase/illustrations/dinosaur.png" }
-    });
-
-    mockSupabase.from = vi.fn((table) => {
-      if (table === "users") {
-        return {
-          select: () => ({ eq: () => ({ maybeSingle: mockMaybeSingleUser }) })
-        };
-      }
-      if (table === "child_known_words") {
-        return {
-          select: () => ({ eq: () => ({ maybeSingle: mockMaybeSingleKnownWords }) })
-        };
-      }
-      if (table === "generated_stories") {
-        return { insert: mockInsert };
-      }
-      return {};
-    }) as any;
-
-    // Attach mock storage
-    (mockSupabase as any).storage = {
-      from: () => ({
-        list: mockStorageList,
-        upload: mockStorageUpload,
-        getPublicUrl: mockStorageGetPublicUrl
-      })
-    };
 
     mockSingle.mockResolvedValue({
       data: {
@@ -258,7 +243,7 @@ describe("Story Image Pipeline Integration Tests (/api/stories/generate)", () =>
         child_id: VALID_CHILD_ID,
         word: "dinosaur",
         story_text: "Dinosaur went roar.",
-        image_url: "https://supabase/illustrations/dinosaur.png",
+        image_url: mockUnsplashUrl,
         validation_score: 95,
         phonics_category: "d"
       },
@@ -281,36 +266,27 @@ describe("Story Image Pipeline Integration Tests (/api/stories/generate)", () =>
 
     const resJson = await res.json();
 
-    // Verify Unsplash was searched
-    expect(fetchSpy).toHaveBeenCalled();
-
-    // Verify DALL-E was called
     expect(mockOpenaiGenerate).toHaveBeenCalledWith(
       expect.objectContaining({
         model: "gpt-image-2"
       }),
       expect.any(Object)
     );
-
-    // Verify DALL-E image was saved to Supabase storage cache
-    expect(mockStorageUpload).toHaveBeenCalledWith(
-      "dinosaur.png",
-      expect.any(Buffer),
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("unsplash.com/search/photos"),
       expect.any(Object)
     );
 
-    // Verify database was updated with DALL-E storage URL
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        image_url: "https://supabase/illustrations/dinosaur.png"
+        image_url: mockUnsplashUrl
       })
     );
 
-    expect(resJson.data.image_url).toBe("https://supabase/illustrations/dinosaur.png");
+    expect(resJson.data.image_url).toBe(mockUnsplashUrl);
   });
 
-  it("should fallback to static placeholder when both Unsplash and DALL-E fail", async () => {
-    // Unsplash search fails
+  it("should fallback to static placeholder when both DALL-E and Unsplash fail", async () => {
     vi.spyOn(global, "fetch").mockImplementation(() =>
       Promise.resolve({
         ok: false,
@@ -318,7 +294,6 @@ describe("Story Image Pipeline Integration Tests (/api/stories/generate)", () =>
       } as any)
     );
 
-    // DALL-E generation fails (OpenAI throws error)
     mockOpenaiGenerate.mockRejectedValueOnce(new Error("DALL-E generation failed"));
 
     mockSingle.mockResolvedValue({
